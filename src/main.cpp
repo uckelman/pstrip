@@ -14,20 +14,18 @@
 class libpff_error: public std::exception {
 public:
   libpff_error(libpff_error_t* error) {
-    char buf[MAXLEN]; 
-    libpff_error_sprint(error, buf, MAXLEN);
+    libpff_error_sprint(error, msg, MAXLEN);
     libpff_error_free(&error);
-    Msg = buf;
   }
 
   virtual ~libpff_error() throw() {}
 
-  virtual const char* what() const throw() { return Msg.c_str(); }
+  virtual const char* what() const throw() { return msg; }
 
 private:
   static const size_t MAXLEN = 1024;
-  
-  std::string Msg;
+
+  char msg[MAXLEN];
 };
 
 libpff_file_t* create_file() {
