@@ -49,15 +49,15 @@ void destroy_file(libpff_file_t* file) {
 }
 
 int main(int argc, char** argv) {
-  if (argc != 2) {
-    throw std::runtime_error("Wrong number arguments");
-  }
+  try {
+    if (argc != 2) {
+      throw std::runtime_error("wrong number of arguments");
+    }
 
-  libpff_error_t* error = 0;
+    libpff_error_t* error = 0;
 
-  boost::shared_ptr<libpff_file_t> file(create_file(), &destroy_file);
+    boost::shared_ptr<libpff_file_t> file(create_file(), &destroy_file);
 
-  try { 
     if (libpff_file_open(file.get(), argv[1], LIBPFF_OPEN_READ, &error) != 1) {
       throw libpff_error(error);
     }
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     }
   }
   catch (const std::exception& e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << "Error: " << e.what() << std::endl;
     return EXIT_FAILURE;
   }
 
