@@ -28,7 +28,7 @@ private:
   char msg[MAXLEN];
 };
 
-libpff_file_t* create_file() {
+libpff_file_t* create_file(const char* filename) {
   libpff_file_t* file = 0;
   libpff_error_t* error = 0;
 
@@ -36,12 +36,40 @@ libpff_file_t* create_file() {
     throw libpff_error(error);
   }
   
+  if (libpff_file_open(file, filename, LIBPFF_OPEN_READ, &error) != 1) {
+    throw libpff_error(error);
+  }
+
   return file;
 }
 
 void destroy_file(libpff_file_t* file) {
   libpff_error_t* error = 0;
+
+  if (libpff_file_close(file, &error) != 0) {
+    throw libpff_error(error);
+  }
+
   if (libpff_file_free(&file, &error) != 1) {
+    throw libpff_error(error);
+  }
+}
+
+libpff_item_t* create_root(libpff_file_t* file) {
+  libpff_item_t* root = 0;
+  libpff_error_t* error = 0;
+
+  if (libpff_file_get_root_item(file, &root, &error) != 1) {
+    throw libpff_error(error);
+  }
+  
+  return root;
+}
+
+void destroy_item(libpff_item_t* item) {
+  libpff_error_t* error = 0;
+
+  if (libpff_item_free(&item, &error) != 1) {
     throw libpff_error(error);
   }
 }
@@ -52,19 +80,23 @@ int main(int argc, char** argv) {
       throw std::runtime_error("wrong number of arguments");
     }
 
+    // setup
     libpff_error_t* error = 0;
 
-    boost::shared_ptr<libpff_file_t> file(create_file(), &destroy_file);
+    boost::shared_ptr<libpff_file_t> filep(create_file(argv[1]), &destroy_file);
+    libpff_file_t* file = filep.get();
 
-    if (libpff_file_open(file.get(), argv[1], LIBPFF_OPEN_READ, &error) != 1) {
+    // find the root
+    boost::shared_ptr<libpff_item_t> rootp(create_root(file), &destroy_item);
+    libpff_item_t* root = rootp.get();
+
+    int childcount;
+    if (libpff_item_get_number_of_sub_items(root, &childcount, &error) != 1) {
       throw libpff_error(error);
     }
 
-// do something here
+    std::cout << childcount << std::endl;
 
-    if (libpff_file_close(file.get(), &error) != 0) {
-      throw libpff_error(error);
-    }
   }
   catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
