@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 
 // do something here
 
-    if (libpff_file_close(file.get(), &error) != 1) {
+    if (libpff_file_close(file.get(), &error) != 0) {
       throw libpff_error(error);
     }
   }
