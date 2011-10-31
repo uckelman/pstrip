@@ -11,7 +11,7 @@ CPPFLAGS := -c -O -g -pg -W -Wall -Wextra -pedantic -pipe -MMD -MP
 INCLUDES := -I$(INCDIR)
 LDLIBS := -lstdc++ -lpff
 
-SOURCES := main.cpp
+SOURCES := main.cpp json_writer.cpp
 OBJECTS := $(SOURCES:.cpp=.o)
 DEPS    := $(OBJECTS:.o=.d)
 
