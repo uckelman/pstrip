@@ -1,4 +1,11 @@
+#include <algorithm>
+#include <iterator>
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
+
 #include "json_writer.h"
+
+const char* JSON_writer::KVSEP = " : ";
 
 std::ostream& operator<<(std::ostream& out, indent func) {
   return func(out);
@@ -9,26 +16,52 @@ std::ostream& operator<<(std::ostream& out, quote func) {
 }
 
 void JSON_writer::object_open() {
-  next_element(); 
+  next_element();
   out << indent(depth++) << "{\n";
-  first_child = true;
+  first_child.push(true);
 }
 
 void JSON_writer::object_close() {
-  out << '\n' << indent(--depth) << '}';
+  if (!first_child.top()) {
+    out << '\n';
+  }
+
+  out << indent(--depth) << '}';
+  first_child.pop();
 }
 
-template <> void JSON_writer::scalar_write<std::string>(
-  const std::string& key,
-  const std::string& value)
+void JSON_writer::scalar_write(const std::string& key, const std::string& value)
 {
   next_element();
-  out << indent(depth) << quote(key) << " : " << quote(value);
+  out << indent(depth) << quote(key) << KVSEP << quote(value);
+}
+
+void JSON_writer::scalar_write(const std::string& key, char* value)
+{
+  scalar_write(key, std::string(value));
+}
+
+void JSON_writer::scalar_write(const std::string& key, const char* value)
+{
+  scalar_write(key, std::string(value));
+}
+
+typedef boost::archive::iterators::base64_from_binary<boost::archive::iterators::transform_width<const char*, 6, 8> > base64_iterator;
+
+void JSON_writer::scalar_write(const std::string& key,
+                               const unsigned char* value, size_t length) {
+  next_element();
+  out << indent(depth) << quote(key) << KVSEP << '"';
+// FIXME: does this pad correctly?
+  std::copy(base64_iterator(value),
+            base64_iterator(value + length),
+            std::ostream_iterator<char>(out));
+  out << '"';
 }
 
 void JSON_writer::next_element() {
-  if (first_child) {
-    first_child = false;
+  if (first_child.top()) {
+    first_child.top() = false;
   }
   else {
     out << ",\n";

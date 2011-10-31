@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ostream>
+#include <stack>
 #include <string>
 
 class indent {
@@ -66,7 +67,9 @@ std::ostream& operator<<(std::ostream& out, quote func);
 
 class JSON_writer {
 public:
-  JSON_writer(std::ostream& o): out(o), depth(0), first_child(true) {} 
+  JSON_writer(std::ostream& o): out(o), depth(0) {
+    first_child.push(true);
+  } 
 
   void object_open();
   void object_close();
@@ -75,13 +78,22 @@ public:
                                           const T& value) 
   {
     next_element();
-    out << indent(depth) << quote(key) << " : " << value;
+    out << indent(depth) << quote(key) << KVSEP << value;
   }
+
+  void scalar_write(const std::string& key, const std::string& value);
+  void scalar_write(const std::string& key, char* value);
+  void scalar_write(const std::string& key, const char* value);
+
+  void scalar_write(const std::string& key,
+                    const unsigned char* value, size_t length);
 
 private:
   void next_element();
 
   std::ostream& out;
   unsigned int depth;
-  bool first_child;
+  std::stack<bool> first_child;
+
+  static const char* KVSEP;
 };
