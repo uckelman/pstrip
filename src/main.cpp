@@ -17,10 +17,11 @@
 
 typedef boost::shared_ptr<libpff_file_t> FilePtr;
 typedef boost::shared_ptr<libpff_item_t> ItemPtr;
+typedef boost::shared_ptr<libpff_multi_value_t> MultiValuePtr;
 
 class libpff_error: public std::exception {
 public:
-  libpff_error(libpff_error_t* error) {
+  libpff_error(libpff_error_t*& error) {
     libpff_error_sprint(error, msg, MAXLEN);
     libpff_error_free(&error);
   }
@@ -92,144 +93,371 @@ void destroy_item(libpff_item_t* item) {
   }
 }
 
-void traverse(libpff_item_t* item, JSON_writer& json) {
+libpff_multi_value_t* get_multivalue(libpff_item_t* item, uint32_t s, uint32_t etype) {
+  libpff_multi_value_t* mv = 0;
+  libpff_error_t* error = 0;
+
+  if (libpff_item_get_entry_multi_value(item, s, etype, &mv, LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
+    throw libpff_error(error);
+  }
+
+  return mv;
+}
+
+void destroy_multivalue(libpff_multi_value_t* mv) {
+  libpff_error_t* error = 0;
+  
+  if (libpff_multi_value_free(&mv, &error) != 1) {
+    throw libpff_error(error);
+  }
+}
+
+void handle_item_values(libpff_item_t* item, JSON_writer& json) {
+  // export_handle_export_item_values
+
+  libpff_error_t* error = 0;
+
+  // number of sets
+  uint32_t sets;
+  if (libpff_item_get_number_of_sets(item, &sets, &error) != 1) {
+    throw libpff_error(error);
+  }
+
+  json.scalar_write("sets", sets);
+
+  // number of entries per set
+  uint32_t entries;
+  if (libpff_item_get_number_of_entries(item, &entries, &error) != 1) {
+    throw libpff_error(error);
+  }
+
+  json.scalar_write("entries per set", entries);
+
+  // iterate over sets
+  for (uint32_t s = 0; s < sets; ++s) {
+    json.object_open();
+    json.scalar_write("set", s);
+
+    // iterate over entries
+    for (uint32_t e = 0; e < entries; ++e) {
+      json.object_open();
+      json.scalar_write("entry", e);
+
+      uint32_t etype;
+      uint32_t vtype;
+      libpff_name_to_id_map_entry_t* nkey = 0;
+
+      try {
+        if (libpff_item_get_entry_type(item, s, e, &etype, &vtype, &nkey, &error) != 1) {
+          throw libpff_error(error);
+        }
+      
+        json.scalar_write("entry type", etype); 
+        json.scalar_write("value type", vtype); 
+
+        try {
+          if (nkey) {
+            uint8_t ntype;
+            if (libpff_name_to_id_map_entry_get_type(nkey, &ntype, &error) != 1) {
+              throw libpff_error(error); 
+            }
+
+            if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_NUMERIC) {
+              uint32_t nnum;
+              if (libpff_name_to_id_map_entry_get_number(nkey, &nnum, &error) != 1) {
+                throw libpff_error(error);
+              }
+
+              json.scalar_write("maps to entry type", nnum);
+            }
+            else if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_STRING) {
+              size_t len;
+              if (libpff_name_to_id_map_entry_get_utf8_string_size(nkey, &len, &error) != 1) {
+                throw libpff_error(error);
+              }
+
+              boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
+              if (libpff_name_to_id_map_entry_get_utf8_string(nkey, name.get(), len, &error) != 1) {
+                throw libpff_error(error);
+              }
+
+              json.scalar_write("maps to entry", (const char*) name.get());
+            }
+          }
+        }
+        catch (const libpff_error& e) {
+          std::cerr << "Error: " << e.what() << std::endl;
+        }
+
+        uint32_t matched_vtype = LIBPFF_VALUE_TYPE_UNSPECIFIED;
+        uint8_t* vdata = 0;
+        size_t len;
+
+        if (libpff_item_get_entry_value(item, s, etype, &matched_vtype, &vdata, &len, LIBPFF_ENTRY_VALUE_FLAG_MATCH_ANY_VALUE_TYPE | LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
+          throw libpff_error(error);
+        }
+
+        json.scalar_write("matched value type", matched_vtype);
+
+        // export_handle_print_data
+        json.scalar_write("value", vdata, len);
+
+/*
+        if (vtype & 0x1000) {
+          MultiValuePtr mvp(get_multivalue(item, s, etype), &destroy_multivalue);
+          // FIXME: Do something here? See multi_value functions...
+        }
+*/
+      }
+      catch (const libpff_error& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+      }
+
+      json.object_close();
+    }
+
+    json.object_close();
+  }
+}
+
+void handle_folder(libpff_item_t* folder, JSON_writer& json) {
+  // export_handle_export_folder
+
+  libpff_error_t* error = 0;
+
+  json.scalar_write("type", "folder");
+
+  // id
+  try {
+    uint32_t id;
+    if (libpff_item_get_identifier(folder, &id, &error) != 1) {
+      throw libpff_error(error);
+    }
+    json.scalar_write("identifier", id);
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+
+  // name
+  try {
+    size_t len;
+    switch (libpff_folder_get_utf8_name_size(folder, &len, &error)) {
+    case -1:
+      throw libpff_error(error);
+    case  0:
+      // name does not exist
+      break;
+    case  1:
+      if (len > 0) {
+        boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
+        if (libpff_folder_get_utf8_name(folder, name.get(), len, &error) != 1) {
+          throw libpff_error(error);
+        }
+        json.scalar_write("name", (const char*) name.get());
+      }
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl; 
+  }
+
+  // item values
+  try { 
+    handle_item_values(folder, json);
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl; 
+  }
+
+  // export_handle_export_unknowns
+
+  // export_handle_sub_items
+}
+
+void handle_item(libpff_item_t* item, JSON_writer& json);
+
+void handle_subitems(libpff_item_t* item, JSON_writer& json) {
+  libpff_error_t* error = 0;
+
+  int children;
+  if (libpff_item_get_number_of_sub_items(item, &children, &error) != 1) {
+    throw libpff_error(error);
+  }
+
+  for (int i = 0; i < children; ++i) {
+    try {
+      ItemPtr childp(get_child(item, i), &destroy_item);
+      handle_item(childp.get(), json);
+    }
+    catch (const libpff_error& e) {
+      std::cerr << "Error: " << e.what() << std::endl; 
+    }
+  }
+}
+
+void handle_item(libpff_item_t* item, JSON_writer& json) {
+  // export_handle_export_items
+
   json.object_open();
 
   libpff_error_t* error = 0;
 
-  // process this item
-  uint8_t type;
-  if (libpff_item_get_type(item, &type, &error) != 1) {
-    libpff_error_fprint(error, stderr);
-    type = LIBPFF_ITEM_TYPE_UNDEFINED;
-  }
-
-  std::string typestr;
-
-// HERE: working from export_handle_export_item
-
-  switch (type) {
-  case LIBPFF_ITEM_TYPE_UNDEFINED:
-    typestr = "undefined";
-    break;
-  case LIBPFF_ITEM_TYPE_ACTIVITY:
-    typestr = "activity";
-    break;
-  case LIBPFF_ITEM_TYPE_APPOINTMENT:
-    typestr = "appointment";
-    break;
-  case LIBPFF_ITEM_TYPE_ATTACHMENT:
-    typestr = "attachment";
-    break;
-  case LIBPFF_ITEM_TYPE_ATTACHMENTS:
-    typestr = "attachments";
-    break;
-  case LIBPFF_ITEM_TYPE_COMMON:
-    typestr = "common";
-    break;
-  case LIBPFF_ITEM_TYPE_CONFIGURATION:
-    typestr = "configuration";
-    break;
-  case LIBPFF_ITEM_TYPE_CONFLICT_MESSAGE:
-    typestr = "conflict message";
-    break;
-  case LIBPFF_ITEM_TYPE_CONTACT:
-    typestr = "contact";
-    break;
-  case LIBPFF_ITEM_TYPE_DISTRIBUTION_LIST:
-    typestr = "distribution list";
-    break;
-  case LIBPFF_ITEM_TYPE_DOCUMENT:
-    typestr = "document";
-    break;
-  case LIBPFF_ITEM_TYPE_EMAIL:
-    typestr = "email";
-    break;
-  case LIBPFF_ITEM_TYPE_EMAIL_SMIME:
-    typestr = "SMIME email";
-    break;
-  case LIBPFF_ITEM_TYPE_FAX:
-    typestr = "fax";
-    break;
-  case LIBPFF_ITEM_TYPE_FOLDER:
-    {
-      typestr = "folder";
-
-      uint32_t id;
-      if (libpff_item_get_identifier(item, &id, &error) != 1) {
-        throw libpff_error(error);
-      }
-
-      json.scalar_write("identifier", id);
-
-// TODO: this seems to produce junk
-      size_t len;
-      libpff_folder_get_utf8_name_size(item, &len, 0);
-
-      boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
-      libpff_folder_get_utf8_name(item, name.get(), len, 0);
-
-      json.scalar_write("name", name.get());
+  try {
+    // item type
+    uint8_t type;
+    if (libpff_item_get_type(item, &type, &error) != 1) {
+      throw libpff_error(error);
     }
-    break;
-  case LIBPFF_ITEM_TYPE_MEETING:
-    typestr = "meeting";
-    break;
-  case LIBPFF_ITEM_TYPE_MMS:
-    typestr = "mms";
-    break;
-  case LIBPFF_ITEM_TYPE_NOTE:
-    typestr = "note";
-    break;
-  case LIBPFF_ITEM_TYPE_POSTING_NOTE:
-    typestr = "posting note";
-    break;
-  case LIBPFF_ITEM_TYPE_RECIPIENTS:
-    typestr = "recipients";
-    break;
-  case LIBPFF_ITEM_TYPE_RSS_FEED:
-    typestr = "RSS feed";
-    break;
-  case LIBPFF_ITEM_TYPE_SHARING:
-    typestr = "sharing";
-    break;
-  case LIBPFF_ITEM_TYPE_SMS:
-    typestr = "SMS";
-    break;
-  case LIBPFF_ITEM_TYPE_SUB_ASSOCIATED_CONTENTS:
-    typestr = "associated contents";
-    break;
-  case LIBPFF_ITEM_TYPE_SUB_FOLDERS:
-    typestr = "folders";
-    break;
-  case LIBPFF_ITEM_TYPE_SUB_MESSAGES:
-    typestr = "messages";
-    break;
-  case LIBPFF_ITEM_TYPE_TASK:
-    typestr = "task";
-    break;
-  case LIBPFF_ITEM_TYPE_TASK_REQUEST:
-    typestr = "request";
-    break;
-  case LIBPFF_ITEM_TYPE_VOICEMAIL:
-    typestr = "voicemail";
-    break;
-  case LIBPFF_ITEM_TYPE_UNKNOWN:
-    typestr = "unknown";
-    break;
+ 
+    std::string typestr;
+
+    switch (type) {
+    case LIBPFF_ITEM_TYPE_UNDEFINED:
+      typestr = "undefined";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_ACTIVITY:
+      typestr = "activity";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_APPOINTMENT:
+      typestr = "appointment";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_ATTACHMENT:
+      typestr = "attachment";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_ATTACHMENTS:
+      typestr = "attachments";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_COMMON:
+      typestr = "common";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_CONFIGURATION:
+      typestr = "configuration";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_CONFLICT_MESSAGE:
+      typestr = "conflict message";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_CONTACT:
+      typestr = "contact";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_DISTRIBUTION_LIST:
+      typestr = "distribution list";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_DOCUMENT:
+      typestr = "document";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_EMAIL:
+      typestr = "email";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_EMAIL_SMIME:
+      typestr = "SMIME email";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_FAX:
+      typestr = "fax";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_FOLDER:
+      handle_folder(item, json);
+      break;
+    case LIBPFF_ITEM_TYPE_MEETING:
+      typestr = "meeting";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_MMS:
+      typestr = "mms";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_NOTE:
+      typestr = "note";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_POSTING_NOTE:
+      typestr = "posting note";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_RECIPIENTS:
+      typestr = "recipients";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_RSS_FEED:
+      typestr = "RSS feed";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_SHARING:
+      typestr = "sharing";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_SMS:
+      typestr = "SMS";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_SUB_ASSOCIATED_CONTENTS:
+      typestr = "associated contents";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_SUB_FOLDERS:
+      typestr = "folders";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_SUB_MESSAGES:
+      typestr = "messages";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_TASK:
+      typestr = "task";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_TASK_REQUEST:
+      typestr = "request";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_VOICEMAIL:
+      typestr = "voicemail";
+      json.scalar_write("type", typestr);
+      break;
+    case LIBPFF_ITEM_TYPE_UNKNOWN:
+      typestr = "unknown";
+      json.scalar_write("type", typestr);
+      break;
+    }
+
+    // process children
+    try {
+      handle_subitems(item, json);
+    }
+    catch (const libpff_error& e) {
+      std::cerr << "Error: " << e.what() << std::endl; 
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+    json.scalar_write("bad", "bad!"); 
   }
 
-  json.scalar_write("type", typestr);
+  json.object_close();
+}
 
-  // process children
-  int childnum;
-  if (libpff_item_get_number_of_sub_items(item, &childnum, &error) != 1) {
-    throw libpff_error(error);
+void handle_root(libpff_item_t* root, JSON_writer& json) {
+  json.object_open();
+
+  try {
+    handle_subitems(root, json);
   }
-
-  for (int i = 0; i < childnum; ++i) {
-    ItemPtr childp(get_child(item, i), &destroy_item);
-    traverse(childp.get(), json);
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl; 
   }
 
   json.object_close();
@@ -251,7 +479,7 @@ int main(int argc, char** argv) {
 
     // process the tree
     JSON_writer json(std::cout);
-    traverse(root, json);
+    handle_root(root, json);
   }
   catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
