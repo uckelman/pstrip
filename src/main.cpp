@@ -274,7 +274,20 @@ void handle_folder(libpff_item_t* folder, JSON_writer& json) {
     }
   }
   catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl; 
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+
+  // type
+  try {
+    uint8_t type;
+    if (libpff_folder_get_type(folder, &type, &error) == -1) {
+      throw libpff_error(error);
+    }
+
+    json.scalar_write("type", (uint32_t) type);
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
   }
 
   // item values
