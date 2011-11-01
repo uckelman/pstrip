@@ -11,6 +11,8 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include <libpff/mapi.h>
+
 #include "main.h"
 
 typedef boost::shared_ptr<libpff_file_t> FilePtr;
@@ -102,11 +104,11 @@ void destroy_item(libpff_item_t* item) {
   }
 }
 
-libpff_multi_value_t* get_multivalue(libpff_item_t* item, uint32_t s, uint32_t etype) {
+libpff_multi_value_t* get_multivalue(libpff_item_t* item, uint32_t s, uint32_t etype, uint8_t flags) {
   libpff_multi_value_t* mv = 0;
   libpff_error_t* error = 0;
 
-  if (libpff_item_get_entry_multi_value(item, s, etype, &mv, LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
+  if (libpff_item_get_entry_multi_value(item, s, etype, &mv, flags, &error) != 1) {
     throw libpff_error(error);
   }
 
@@ -118,6 +120,608 @@ void destroy_multivalue(libpff_multi_value_t* mv) {
   
   if (libpff_multi_value_free(&mv, &error) != 1) {
     throw libpff_error(error);
+  }
+}
+
+std::string item_type_string(uint32_t itype) {
+  switch (itype) {
+  case LIBPFF_ITEM_TYPE_UNDEFINED:
+    return "UNDEFINED";
+  case LIBPFF_ITEM_TYPE_ACTIVITY:
+    return "ACTIVITY";
+  case LIBPFF_ITEM_TYPE_APPOINTMENT:
+    return "APPOINTMENT";
+  case LIBPFF_ITEM_TYPE_ATTACHMENT:
+    return "ATTACHMENT";
+  case LIBPFF_ITEM_TYPE_ATTACHMENTS:
+    return "ATTACHMENTS";
+  case LIBPFF_ITEM_TYPE_COMMON:
+    return "COMMON";
+  case LIBPFF_ITEM_TYPE_CONFIGURATION:
+    return "CONFIGURATION";
+  case LIBPFF_ITEM_TYPE_CONFLICT_MESSAGE:
+    return "CONFLICT_MESSAGE";
+  case LIBPFF_ITEM_TYPE_CONTACT:
+    return "CONTACT";
+  case LIBPFF_ITEM_TYPE_DISTRIBUTION_LIST:
+    return "DISTRIBUTION_LIST";
+  case LIBPFF_ITEM_TYPE_DOCUMENT:
+    return "DOCUMENT";
+  case LIBPFF_ITEM_TYPE_EMAIL:
+    return "EMAIL";
+  case LIBPFF_ITEM_TYPE_EMAIL_SMIME:
+    return "EMAIL_SMIME";
+  case LIBPFF_ITEM_TYPE_FAX:
+    return "FAX";
+  case LIBPFF_ITEM_TYPE_FOLDER:
+    return "FOLDER";
+  case LIBPFF_ITEM_TYPE_MEETING:
+    return "MEETING";
+  case LIBPFF_ITEM_TYPE_MMS:
+    return "MMS";
+  case LIBPFF_ITEM_TYPE_NOTE:
+    return "NOTE";
+  case LIBPFF_ITEM_TYPE_POSTING_NOTE:
+    return "POSTING_NOTE";
+  case LIBPFF_ITEM_TYPE_RECIPIENTS:
+    return "RECIPIENTS";
+  case LIBPFF_ITEM_TYPE_RSS_FEED:
+    return "RSS_FEED";
+  case LIBPFF_ITEM_TYPE_SHARING:
+    return "SHARING";
+  case LIBPFF_ITEM_TYPE_SMS:
+    return "SMS";
+  case LIBPFF_ITEM_TYPE_SUB_ASSOCIATED_CONTENTS:
+    return "SUB_ASSOCIATED_CONTENTS";
+  case LIBPFF_ITEM_TYPE_SUB_FOLDERS:
+    return "SUB_FOLDERS";
+  case LIBPFF_ITEM_TYPE_SUB_MESSAGES:
+    return "SUB_MESSAGES";
+  case LIBPFF_ITEM_TYPE_TASK:
+    return "TASK";
+  case LIBPFF_ITEM_TYPE_TASK_REQUEST:
+    return "TASK_REQUEST";
+  case LIBPFF_ITEM_TYPE_VOICEMAIL:
+    return "VOICEMAIL";
+  case LIBPFF_ITEM_TYPE_UNKNOWN:
+    return "UNKNOWN";
+  default:
+    return "!!!";
+  }
+}
+
+std::string entry_type_string(uint32_t etype) {
+  switch (etype) {
+  case LIBPFF_ENTRY_TYPE_MESSAGE_IMPORTANCE:
+    return "MESSAGE_IMPORTANCE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_CLASS:
+    return "MESSAGE_CLASS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_PRIORITY:
+    return "MESSAGE_PRIORITY";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENSITIVITY:
+    return "MESSAGE_SENSITIVITY";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SUBJECT:
+    return "MESSAGE_SUBJECT";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_CLIENT_SUBMIT_TIME:
+    return "MESSAGE_CLIENT_SUBMIT_TIME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENT_REPRESENTING_SEARCH_KEY:
+    return "MESSAGE_SENT_REPRESENTING_SEARCH_KEY";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_BY_ENTRY_IDENTIFIER:
+    return "MESSAGE_RECEIVED_BY_ENTRY_IDENTIFIER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_BY_NAME:
+    return "MESSAGE_RECEIVED_BY_NAME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENT_REPRESENTING_ENTRY_IDENTIFIER:
+    return "MESSAGE_SENT_REPRESENTING_ENTRY_IDENTIFIER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENT_REPRESENTING_NAME:
+    return "MESSAGE_SENT_REPRESENTING_NAME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_REPRESENTING_ENTRY_IDENTIFIER:
+    return "MESSAGE_RECEIVED_REPRESENTING_ENTRY_IDENTIFIER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_REPRESENTING_NAME:
+    return "MESSAGE_RECEIVED_REPRESENTING_NAME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_REPLY_RECIPIENT_ENTRIES:
+    return "MESSAGE_REPLY_RECIPIENT_ENTRIES";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_REPLY_RECIPIENT_NAMES:
+    return "MESSAGE_REPLY_RECIPIENT_NAMES";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_BY_SEARCH_KEY:
+    return "MESSAGE_RECEIVED_BY_SEARCH_KEY";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_REPRESENTING_SEARCH_KEY:
+    return "MESSAGE_RECEIVED_REPRESENTING_SEARCH_KEY";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENT_REPRESENTING_ADDRESS_TYPE:
+    return "MESSAGE_SENT_REPRESENTING_ADDRESS_TYPE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENT_REPRESENTING_EMAIL_ADDRESS:
+    return "MESSAGE_SENT_REPRESENTING_EMAIL_ADDRESS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_CONVERSATION_TOPIC:
+    return "MESSAGE_CONVERSATION_TOPIC";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_CONVERSATION_INDEX:
+    return "MESSAGE_CONVERSATION_INDEX";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_BY_ADDRESS_TYPE:
+    return "MESSAGE_RECEIVED_BY_ADDRESS_TYPE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_BY_EMAIL_ADDRESS:
+    return "MESSAGE_RECEIVED_BY_EMAIL_ADDRESS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_REPRESENTING_ADDRESS_TYPE:
+    return "MESSAGE_RECEIVED_REPRESENTING_ADDRESS_TYPE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_RECEIVED_REPRESENTING_EMAIL_ADDRESS:
+    return "MESSAGE_RECEIVED_REPRESENTING_EMAIL_ADDRESS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_TRANSPORT_HEADERS:
+    return "MESSAGE_TRANSPORT_HEADERS";
+  case LIBPFF_ENTRY_TYPE_RECIPIENT_TYPE:
+    return "RECIPIENT_TYPE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENDER_ENTRY_IDENTIFIER:
+    return "MESSAGE_SENDER_ENTRY_IDENTIFIER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENDER_NAME:
+    return "MESSAGE_SENDER_NAME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENDER_SEARCH_KEY:
+    return "MESSAGE_SENDER_SEARCH_KEY";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENDER_ADDRESS_TYPE:
+    return "MESSAGE_SENDER_ADDRESS_TYPE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SENDER_EMAIL_ADDRESS:
+    return "MESSAGE_SENDER_EMAIL_ADDRESS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_DISPLAY_TO:
+    return "MESSAGE_DISPLAY_TO";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_DELIVERY_TIME:
+    return "MESSAGE_DELIVERY_TIME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_FLAGS:
+    return "MESSAGE_FLAGS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_SIZE:
+    return "MESSAGE_SIZE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_STATUS:
+    return "MESSAGE_STATUS";
+  case LIBPFF_ENTRY_TYPE_ATTACHMENT_SIZE:
+    return "ATTACHMENT_SIZE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_INTERNET_ARTICLE_NUMBER:
+    return "MESSAGE_INTERNET_ARTICLE_NUMBER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_PERMISSION:
+    return "MESSAGE_PERMISSION";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_URL_COMPUTER_NAME_SET:
+    return "MESSAGE_URL_COMPUTER_NAME_SET";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_TRUST_SENDER:
+    return "MESSAGE_TRUST_SENDER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_BODY_PLAIN_TEXT:
+    return "MESSAGE_BODY_PLAIN_TEXT";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_BODY_COMPRESSED_RTF:
+    return "MESSAGE_BODY_COMPRESSED_RTF";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_BODY_HTML:
+    return "MESSAGE_BODY_HTML";
+  case LIBPFF_ENTRY_TYPE_EMAIL_EML_FILENAME:
+    return "EMAIL_EML_FILENAME";
+  case LIBPFF_ENTRY_TYPE_DISPLAY_NAME:
+    return "DISPLAY_NAME";
+  case LIBPFF_ENTRY_TYPE_ADDRESS_TYPE:
+    return "ADDRESS_TYPE";
+  case LIBPFF_ENTRY_TYPE_EMAIL_ADDRESS:
+    return "EMAIL_ADDRESS";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_CREATION_TIME:
+    return "MESSAGE_CREATION_TIME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_MODIFICATION_TIME:
+    return "MESSAGE_MODIFICATION_TIME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_STORE_VALID_FOLDER_MASK:
+    return "MESSAGE_STORE_VALID_FOLDER_MASK";
+  case LIBPFF_ENTRY_TYPE_FOLDER_TYPE:
+    return "FOLDER_TYPE";
+  case LIBPFF_ENTRY_TYPE_NUMBER_OF_CONTENT_ITEMS:
+    return "NUMBER_OF_CONTENT_ITEMS";
+  case LIBPFF_ENTRY_TYPE_NUMBER_OF_UNREAD_CONTENT_ITEMS:
+    return "NUMBER_OF_UNREAD_CONTENT_ITEMS";
+  case LIBPFF_ENTRY_TYPE_HAS_SUB_FOLDERS:
+    return "HAS_SUB_FOLDERS";
+  case LIBPFF_ENTRY_TYPE_CONTAINER_CLASS:
+    return "CONTAINER_CLASS";
+  case LIBPFF_ENTRY_TYPE_NUMBER_OF_ASSOCIATED_CONTENT:
+    return "NUMBER_OF_ASSOCIATED_CONTENT";
+  case LIBPFF_ENTRY_TYPE_ATTACHMENT_DATA_OBJECT:
+    return "ATTACHMENT_DATA_OBJECT";
+  case LIBPFF_ENTRY_TYPE_ATTACHMENT_FILENAME_SHORT:
+    return "ATTACHMENT_FILENAME_SHORT";
+  case LIBPFF_ENTRY_TYPE_ATTACHMENT_METHOD:
+    return "ATTACHMENT_METHOD";
+  case LIBPFF_ENTRY_TYPE_ATTACHMENT_FILENAME_LONG:
+    return "ATTACHMENT_FILENAME_LONG";
+  case LIBPFF_ENTRY_TYPE_ATTACHMENT_RENDERING_POSITION:
+    return "ATTACHMENT_RENDERING_POSITION";
+  case LIBPFF_ENTRY_TYPE_CONTACT_CALLBACK_PHONE_NUMBER:
+    return "CONTACT_CALLBACK_PHONE_NUMBER";
+  case LIBPFF_ENTRY_TYPE_CONTACT_GENERATIONAL_ABBREVIATION:
+    return "CONTACT_GENERATIONAL_ABBREVIATION";
+  case LIBPFF_ENTRY_TYPE_CONTACT_GIVEN_NAME:
+    return "CONTACT_GIVEN_NAME";
+  case LIBPFF_ENTRY_TYPE_CONTACT_BUSINESS_PHONE_NUMBER_1:
+    return "CONTACT_BUSINESS_PHONE_NUMBER_1";
+  case LIBPFF_ENTRY_TYPE_CONTACT_HOME_PHONE_NUMBER:
+    return "CONTACT_HOME_PHONE_NUMBER";
+  case LIBPFF_ENTRY_TYPE_CONTACT_INITIALS:
+    return "CONTACT_INITIALS";
+  case LIBPFF_ENTRY_TYPE_CONTACT_SURNAME:
+    return "CONTACT_SURNAME";
+  case LIBPFF_ENTRY_TYPE_CONTACT_POSTAL_ADDRESS:
+    return "CONTACT_POSTAL_ADDRESS";
+  case LIBPFF_ENTRY_TYPE_CONTACT_COMPANY_NAME:
+    return "CONTACT_COMPANY_NAME";
+  case LIBPFF_ENTRY_TYPE_CONTACT_JOB_TITLE:
+    return "CONTACT_JOB_TITLE";
+  case LIBPFF_ENTRY_TYPE_CONTACT_DEPARTMENT_NAME:
+    return "CONTACT_DEPARTMENT_NAME";
+  case LIBPFF_ENTRY_TYPE_CONTACT_OFFICE_LOCATION:
+    return "CONTACT_OFFICE_LOCATION";
+  case LIBPFF_ENTRY_TYPE_CONTACT_PRIMARY_PHONE_NUMBER:
+    return "CONTACT_PRIMARY_PHONE_NUMBER";
+  case LIBPFF_ENTRY_TYPE_CONTACT_BUSINESS_PHONE_NUMBER_2:
+    return "CONTACT_BUSINESS_PHONE_NUMBER_2";
+  case LIBPFF_ENTRY_TYPE_CONTACT_MOBILE_PHONE_NUMBER:
+    return "CONTACT_MOBILE_PHONE_NUMBER";
+  case LIBPFF_ENTRY_TYPE_CONTACT_BUSINESS_FAX_NUMBER:
+    return "CONTACT_BUSINESS_FAX_NUMBER";
+  case LIBPFF_ENTRY_TYPE_CONTACT_COUNTRY:
+    return "CONTACT_COUNTRY";
+  case LIBPFF_ENTRY_TYPE_CONTACT_LOCALITY:
+    return "CONTACT_LOCALITY";
+  case LIBPFF_ENTRY_TYPE_CONTACT_TITLE:
+    return "CONTACT_TITLE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_BODY_CODEPAGE:
+    return "MESSAGE_BODY_CODEPAGE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_CODEPAGE:
+    return "MESSAGE_CODEPAGE";
+  case LIBPFF_ENTRY_TYPE_RECIPIENT_DISPLAY_NAME:
+    return "RECIPIENT_DISPLAY_NAME";
+  case LIBPFF_ENTRY_TYPE_FOLDER_CHILD_COUNT:
+    return "FOLDER_CHILD_COUNT";
+  case LIBPFF_ENTRY_TYPE_SUB_ITEM_IDENTIFIER:
+    return "SUB_ITEM_IDENTIFIER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_STORE_PASSWORD_CHECKSUM:
+    return "MESSAGE_STORE_PASSWORD_CHECKSUM";
+  case LIBPFF_ENTRY_TYPE_ADDRESS_FILE_UNDER:
+    return "ADDRESS_FILE_UNDER";
+  case LIBPFF_ENTRY_TYPE_TASK_STATUS:
+    return "TASK_STATUS";
+  case LIBPFF_ENTRY_TYPE_TASK_PERCENTAGE_COMPLETE:
+    return "TASK_PERCENTAGE_COMPLETE";
+  case LIBPFF_ENTRY_TYPE_TASK_START_DATE:
+    return "TASK_START_DATE";
+  case LIBPFF_ENTRY_TYPE_TASK_DUE_DATE:
+    return "TASK_DUE_DATE";
+  case LIBPFF_ENTRY_TYPE_TASK_ACTUAL_EFFORT:
+    return "TASK_ACTUAL_EFFORT";
+  case LIBPFF_ENTRY_TYPE_TASK_TOTAL_EFFORT:
+    return "TASK_TOTAL_EFFORT";
+  case LIBPFF_ENTRY_TYPE_TASK_VERSION:
+    return "TASK_VERSION";
+  case LIBPFF_ENTRY_TYPE_TASK_IS_COMPLETE:
+    return "TASK_IS_COMPLETE";
+  case LIBPFF_ENTRY_TYPE_TASK_IS_RECURRING:
+    return "TASK_IS_RECURRING";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_BUSY_STATUS:
+    return "APPOINTMENT_BUSY_STATUS";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_LOCATION:
+    return "APPOINTMENT_LOCATION";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_START_TIME:
+    return "APPOINTMENT_START_TIME";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_END_TIME:
+    return "APPOINTMENT_END_TIME";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_DURATION:
+    return "APPOINTMENT_DURATION";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_IS_RECURRING:
+    return "APPOINTMENT_IS_RECURRING";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_RECURRENCE_PATTERN:
+    return "APPOINTMENT_RECURRENCE_PATTERN";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_TIMEZONE_DESCRIPTION:
+    return "APPOINTMENT_TIMEZONE_DESCRIPTION";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_FIRST_EFFECTIVE_TIME:
+    return "APPOINTMENT_FIRST_EFFECTIVE_TIME";
+  case LIBPFF_ENTRY_TYPE_APPOINTMENT_LAST_EFFECTIVE_TIME:
+    return "APPOINTMENT_LAST_EFFECTIVE_TIME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_REMINDER_TIME:
+    return "MESSAGE_REMINDER_TIME";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_IS_REMINDER:
+    return "MESSAGE_IS_REMINDER";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_IS_PRIVATE:
+    return "MESSAGE_IS_PRIVATE";
+  case LIBPFF_ENTRY_TYPE_MESSAGE_REMINDER_SIGNAL_TIME:
+    return "MESSAGE_REMINDER_SIGNAL_TIME";
+  default:
+    return "!!!";
+  }
+}
+
+void write_single_value(
+  libpff_item_t* item,
+  uint32_t si,
+  uint32_t etype,
+  uint32_t vtype,
+  uint8_t flags,
+  JSON_writer& json)
+{
+  libpff_error_t* error = 0;
+
+  std::string key(entry_type_string(etype));
+
+  switch (vtype) {
+  case LIBPFF_VALUE_TYPE_UNSPECIFIED:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_NULL:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_INTEGER_16BIT_SIGNED:
+    {
+      uint16_t val;
+      switch (libpff_item_get_entry_value_16bit(item, si, etype, &val, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, (int16_t) val);
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_INTEGER_32BIT_SIGNED:
+    {
+      uint32_t val;
+      switch (libpff_item_get_entry_value_32bit(item, si, etype, &val, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, (int32_t) val); 
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_FLOAT_32BIT:
+  case LIBPFF_VALUE_TYPE_DOUBLE_64BIT:
+    {
+      double val;
+      switch (libpff_item_get_entry_value_floating_point(item, si, etype, &val, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, val); 
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_CURRENCY:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_APPLICATION_TIME:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_ERROR:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_BOOLEAN:
+    {
+      uint8_t val;
+      switch (libpff_item_get_entry_value_boolean(item, si, etype, &val, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, (bool) val);
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_OBJECT:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_INTEGER_64BIT_SIGNED:
+    {
+      uint64_t val;
+      switch (libpff_item_get_entry_value_64bit(item, si, etype, &val, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, (int64_t) val); 
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_STRING_ASCII:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_STRING_UNICODE:
+    {
+      size_t len;
+      switch (libpff_item_get_entry_value_utf8_string_size(item, si, etype, &len, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        {
+          boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+          if (libpff_item_get_entry_value_utf8_string(item, si, etype, buf.get(), len, flags, &error) != 1) {
+            throw libpff_error(error);
+          }
+
+          json.scalar_write(key, (const char*) buf.get());
+        }
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_FILETIME:
+    {
+      uint64_t ts;
+      switch (libpff_item_get_entry_value_filetime(item, si, etype, &ts, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, ts); 
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_GUID:
+     {
+      size_t len;
+      switch (libpff_item_get_entry_value_size(item, si, etype, &len, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        {
+// FIXME: will this be a printable string?
+          boost::scoped_array<uint8_t> buf(new uint8_t[len+1]);
+          if (libpff_item_get_entry_value_guid(item, si, etype, buf.get(), len, flags, &error) != 1) {
+            throw libpff_error(error);
+          }
+
+          json.scalar_write(key, (const char*) buf.get());
+        }
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_SERVER_IDENTIFIER:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_RESTRICTION:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_RULE_ACTION:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_BINARY_DATA:
+    {
+      size_t len;
+      switch (libpff_item_get_entry_value_binary_data_size(item, si, etype, &len, flags, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        {
+          boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+          if (libpff_item_get_entry_value_binary_data(item, si, etype, buf.get(), len, flags, &error) != 1) {
+            throw libpff_error(error);
+          }
+
+          json.scalar_write(key, buf.get(), len);
+        }
+        break;
+      }
+    }
+//    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+  }
+}
+
+void write_multi_value(
+  libpff_item_t* item,
+  uint32_t si,
+  uint32_t etype,
+  uint32_t vtype,
+  uint8_t flags,
+  JSON_writer& json)
+{
+  libpff_error_t* error = 0;
+
+  std::string key(entry_type_string(etype));
+
+  MultiValuePtr mvp(get_multivalue(item, si, etype, flags), &destroy_multivalue);
+  libpff_multi_value_t* mv = mvp.get();
+      
+  int vcount;
+  if (libpff_multi_value_get_number_of_values(mv, &vcount, &error) == -1) {
+    throw libpff_error(error);
+  }
+
+  json.list_open();
+
+  switch (vtype) {
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_INTEGER_16BIT_SIGNED:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_INTEGER_32BIT_SIGNED:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_FLOAT_32BIT:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_DOUBLE_64BIT:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_CURRENCY:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_APPLICATION_TIME:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_INTEGER_64BIT_SIGNED:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_STRING_ASCII:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_STRING_UNICODE:
+    for (int i = 0; i < vcount; ++i) {
+      size_t len;
+      switch (libpff_multi_value_get_value_utf8_string_size(mv, i, &len, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        {
+          boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+          if (libpff_multi_value_get_value_utf8_string(mv, i, buf.get(), len, &error) != 1) {
+            throw libpff_error(error);
+          }
+
+          json.scalar_write(key, (const char*) buf.get());
+        }
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_FILETIME:
+    for (int i = 0; i < vcount; ++i) {
+      uint64_t ts;
+      switch (libpff_multi_value_get_value_filetime(mv, i, &ts, &error)) {
+      case -1:
+        throw libpff_error(error);
+      case  0:
+        break;
+      case  1:
+        json.scalar_write(key, ts); 
+        break;
+      }
+    }
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_GUID:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  case LIBPFF_VALUE_TYPE_MULTI_VALUE_BINARY_DATA:
+    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    break;
+  }
+}
+
+void write_entry(
+  libpff_item_t* item,
+  uint32_t si,
+  uint32_t etype,
+  uint32_t vtype,
+  uint8_t flags,
+  JSON_writer& json)
+{  
+  libpff_error_t* error = 0;
+
+  if (vtype & LIBPFF_VALUE_TYPE_MULTI_VALUE_FLAG) {
+    write_multi_value(item, si, etype, vtype, flags, json);
+  }
+  else {
+    write_single_value(item, si, etype, vtype, flags, json);
   }
 }
 
@@ -156,12 +760,12 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer&
           throw libpff_error(error);
         }
 
-        boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
-        if (libpff_name_to_id_map_entry_get_utf8_string(nkey, name.get(), len, &error) != 1) {
+        boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+        if (libpff_name_to_id_map_entry_get_utf8_string(nkey, buf.get(), len, &error) != 1) {
           throw libpff_error(error);
         }
 
-        json.scalar_write("maps to entry", (const char*) name.get());
+        json.scalar_write("maps to entry", (const char*) buf.get());
       }
     }
   }
@@ -179,15 +783,15 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer&
 
   json.scalar_write("matched value type", matched_vtype);
 
-  // export_handle_print_data
-  json.scalar_write("value", vdata, len);
-
-/*
-  if (vtype & 0x1000) {
-    MultiValuePtr mvp(get_multivalue(item, s, etype), &destroy_multivalue);
-    // FIXME: Do something here? See multi_value functions...
+  try {
+    write_entry(item, s, etype, vtype, 0, json);
   }
-*/
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+
+  // export_handle_print_data
+//  json.scalar_write("value", vdata, len);
 }
 
 void handle_item_values(libpff_item_t* item, JSON_writer& json) {
@@ -238,66 +842,6 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
 void handle_folder(libpff_item_t* folder, JSON_writer& json) {
   // export_handle_export_folder
 
-  libpff_error_t* error = 0;
-
-  json.scalar_write("type", "folder");
-
-  // id
-  try {
-    uint32_t id;
-    if (libpff_item_get_identifier(folder, &id, &error) != 1) {
-      throw libpff_error(error);
-    }
-    json.scalar_write("identifier", id);
-  }
-  catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-  }
-
-  // name
-  try {
-    size_t len;
-    switch (libpff_folder_get_utf8_name_size(folder, &len, &error)) {
-    case -1:
-      throw libpff_error(error);
-    case  0:
-      // name does not exist
-      break;
-    case  1:
-      if (len > 0) {
-        boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
-        if (libpff_folder_get_utf8_name(folder, name.get(), len, &error) != 1) {
-          throw libpff_error(error);
-        }
-        json.scalar_write("name", (const char*) name.get());
-      }
-    }
-  }
-  catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-  }
-
-  // type
-  try {
-    uint8_t type;
-    if (libpff_folder_get_type(folder, &type, &error) == -1) {
-      throw libpff_error(error);
-    }
-
-    json.scalar_write("type", (uint32_t) type);
-  }
-  catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-  }
-
-  // item values
-  try { 
-    handle_item_values(folder, json);
-  }
-  catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl; 
-  }
-
   /*
   // unknowns
   try {
@@ -324,13 +868,6 @@ void handle_folder(libpff_item_t* folder, JSON_writer& json) {
     std::cerr << "Error: " << e.what() << std::endl;
   }
   */
-
-  try {
-    handle_subitems(folder, json);
-  }
-  catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-  }
 }
 
 void handle_subitems(libpff_item_t* item, JSON_writer& json) {
@@ -361,133 +898,31 @@ void handle_item(libpff_item_t* item, JSON_writer& json) {
 
   try {
     // item type
-    uint8_t type;
-    if (libpff_item_get_type(item, &type, &error) != 1) {
+    uint8_t itype;
+    if (libpff_item_get_type(item, &itype, &error) != 1) {
       throw libpff_error(error);
     }
  
-    std::string typestr;
+    json.scalar_write("type", item_type_string(itype));
 
-    switch (type) {
-    case LIBPFF_ITEM_TYPE_UNDEFINED:
-      typestr = "undefined";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_ACTIVITY:
-      typestr = "activity";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_APPOINTMENT:
-      typestr = "appointment";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_ATTACHMENT:
-      typestr = "attachment";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_ATTACHMENTS:
-      typestr = "attachments";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_COMMON:
-      typestr = "common";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_CONFIGURATION:
-      typestr = "configuration";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_CONFLICT_MESSAGE:
-      typestr = "conflict message";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_CONTACT:
-      typestr = "contact";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_DISTRIBUTION_LIST:
-      typestr = "distribution list";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_DOCUMENT:
-      typestr = "document";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_EMAIL:
-      typestr = "email";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_EMAIL_SMIME:
-      typestr = "SMIME email";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_FAX:
-      typestr = "fax";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_FOLDER:
-      handle_folder(item, json);
-      break;
-    case LIBPFF_ITEM_TYPE_MEETING:
-      typestr = "meeting";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_MMS:
-      typestr = "mms";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_NOTE:
-      typestr = "note";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_POSTING_NOTE:
-      typestr = "posting note";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_RECIPIENTS:
-      typestr = "recipients";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_RSS_FEED:
-      typestr = "RSS feed";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_SHARING:
-      typestr = "sharing";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_SMS:
-      typestr = "SMS";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_SUB_ASSOCIATED_CONTENTS:
-      typestr = "associated contents";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_SUB_FOLDERS:
-      typestr = "folders";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_SUB_MESSAGES:
-      typestr = "messages";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_TASK:
-      typestr = "task";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_TASK_REQUEST:
-      typestr = "request";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_VOICEMAIL:
-      typestr = "voicemail";
-      json.scalar_write("type", typestr);
-      break;
-    case LIBPFF_ITEM_TYPE_UNKNOWN:
-      typestr = "unknown";
-      json.scalar_write("type", typestr);
-      break;
+    // identifier
+    try {
+      uint32_t id;
+      if (libpff_item_get_identifier(item, &id, &error) != 1) {
+        throw libpff_error(error);
+      }
+      json.scalar_write("identifier", id);
+    }
+    catch (const libpff_error& e) {
+      std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+    // item values
+    try {
+      handle_item_values(item, json);
+    }
+    catch (const libpff_error& e) {
+      std::cerr << "Error: " << e.what() << std::endl;
     }
 
     // process children
