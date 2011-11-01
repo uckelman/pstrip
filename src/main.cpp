@@ -112,6 +112,75 @@ void destroy_multivalue(libpff_multi_value_t* mv) {
   }
 }
 
+void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer& json) {
+  libpff_error_t* error = 0;
+
+  uint32_t etype;
+  uint32_t vtype;
+  libpff_name_to_id_map_entry_t* nkey = 0;
+
+  if (libpff_item_get_entry_type(item, s, e, &etype, &vtype, &nkey, &error) != 1) {
+    throw libpff_error(error);
+  }
+
+  json.scalar_write("entry type", etype);
+  json.scalar_write("value type", vtype);
+
+  try {
+    if (nkey) {
+      uint8_t ntype;
+      if (libpff_name_to_id_map_entry_get_type(nkey, &ntype, &error) != 1) {
+        throw libpff_error(error);
+      }
+
+      if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_NUMERIC) {
+        uint32_t nnum;
+        if (libpff_name_to_id_map_entry_get_number(nkey, &nnum, &error) != 1) {
+          throw libpff_error(error);
+        }
+
+        json.scalar_write("maps to entry type", nnum);
+      }
+      else if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_STRING) {
+        size_t len;
+        if (libpff_name_to_id_map_entry_get_utf8_string_size(nkey, &len, &error) != 1) {
+          throw libpff_error(error);
+        }
+
+        boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
+        if (libpff_name_to_id_map_entry_get_utf8_string(nkey, name.get(), len, &error) != 1) {
+          throw libpff_error(error);
+        }
+
+        json.scalar_write("maps to entry", (const char*) name.get());
+      }
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+
+  uint32_t matched_vtype = LIBPFF_VALUE_TYPE_UNSPECIFIED;
+  uint8_t* vdata = 0;
+  size_t len;
+
+  if (libpff_item_get_entry_value(item, s, etype, &matched_vtype, &vdata, &len, LIBPFF_ENTRY_VALUE_FLAG_MATCH_ANY_VALUE_TYPE | LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
+    throw libpff_error(error);
+  }
+
+  json.scalar_write("matched value type", matched_vtype);
+
+  // export_handle_print_data
+  json.scalar_write("value", vdata, len);
+
+/*
+  if (vtype & 0x1000) {
+    MultiValuePtr mvp(get_multivalue(item, s, etype), &destroy_multivalue);
+    // FIXME: Do something here? See multi_value functions...
+  }
+*/
+}
+
 void handle_item_values(libpff_item_t* item, JSON_writer& json) {
   // export_handle_export_item_values
 
@@ -143,71 +212,8 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
       json.object_open();
       json.scalar_write("entry", e);
 
-      uint32_t etype;
-      uint32_t vtype;
-      libpff_name_to_id_map_entry_t* nkey = 0;
-
       try {
-        if (libpff_item_get_entry_type(item, s, e, &etype, &vtype, &nkey, &error) != 1) {
-          throw libpff_error(error);
-        }
-      
-        json.scalar_write("entry type", etype); 
-        json.scalar_write("value type", vtype); 
-
-        try {
-          if (nkey) {
-            uint8_t ntype;
-            if (libpff_name_to_id_map_entry_get_type(nkey, &ntype, &error) != 1) {
-              throw libpff_error(error); 
-            }
-
-            if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_NUMERIC) {
-              uint32_t nnum;
-              if (libpff_name_to_id_map_entry_get_number(nkey, &nnum, &error) != 1) {
-                throw libpff_error(error);
-              }
-
-              json.scalar_write("maps to entry type", nnum);
-            }
-            else if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_STRING) {
-              size_t len;
-              if (libpff_name_to_id_map_entry_get_utf8_string_size(nkey, &len, &error) != 1) {
-                throw libpff_error(error);
-              }
-
-              boost::scoped_array<uint8_t> name(new uint8_t[len+1]);
-              if (libpff_name_to_id_map_entry_get_utf8_string(nkey, name.get(), len, &error) != 1) {
-                throw libpff_error(error);
-              }
-
-              json.scalar_write("maps to entry", (const char*) name.get());
-            }
-          }
-        }
-        catch (const libpff_error& e) {
-          std::cerr << "Error: " << e.what() << std::endl;
-        }
-
-        uint32_t matched_vtype = LIBPFF_VALUE_TYPE_UNSPECIFIED;
-        uint8_t* vdata = 0;
-        size_t len;
-
-        if (libpff_item_get_entry_value(item, s, etype, &matched_vtype, &vdata, &len, LIBPFF_ENTRY_VALUE_FLAG_MATCH_ANY_VALUE_TYPE | LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
-          throw libpff_error(error);
-        }
-
-        json.scalar_write("matched value type", matched_vtype);
-
-        // export_handle_print_data
-        json.scalar_write("value", vdata, len);
-
-/*
-        if (vtype & 0x1000) {
-          MultiValuePtr mvp(get_multivalue(item, s, etype), &destroy_multivalue);
-          // FIXME: Do something here? See multi_value functions...
-        }
-*/
+        handle_item_value(item, s, e, json);
       }
       catch (const libpff_error& e) {
         std::cerr << "Error: " << e.what() << std::endl;
