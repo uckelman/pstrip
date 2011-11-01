@@ -11,9 +11,7 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 
-#include <libpff.h>
-
-#include "json_writer.h"
+#include "main.h"
 
 typedef boost::shared_ptr<libpff_file_t> FilePtr;
 typedef boost::shared_ptr<libpff_item_t> ItemPtr;
@@ -83,6 +81,17 @@ libpff_item_t* get_child(libpff_item_t* parent, int pos) {
   }
   
   return child;
+}
+
+libpff_item_t* get_unknowns(libpff_item_t* folder) {
+  libpff_item_t* unknowns = 0;
+  libpff_error_t* error = 0;
+
+  if (libpff_folder_get_unknowns(folder, &unknowns, &error) == -1) {
+    throw libpff_error(error);
+  }
+
+  return unknowns;
 }
 
 void destroy_item(libpff_item_t* item) {
@@ -276,12 +285,40 @@ void handle_folder(libpff_item_t* folder, JSON_writer& json) {
     std::cerr << "Error: " << e.what() << std::endl; 
   }
 
-  // export_handle_export_unknowns
+  /*
+  // unknowns
+  try {
+    // export_handle_export_unknowns
+    ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
+    if (unknownsp) {
+      json.object_open();
 
-  // export_handle_sub_items
+      libpff_item_t* unknowns = unknownsp.get();
+
+      uint32_t ucount;
+      if (libpff_item_get_number_of_sets(unknowns, &ucount, &error) == -1) {
+        throw libpff_error(error);
+      }
+
+      for (uint32_t u = 0; u < ucount; ++u) {
+        // FIXME: do something here?
+      }
+
+      json.object_close();
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+  */
+
+  try {
+    handle_subitems(folder, json);
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
 }
-
-void handle_item(libpff_item_t* item, JSON_writer& json);
 
 void handle_subitems(libpff_item_t* item, JSON_writer& json) {
   libpff_error_t* error = 0;
