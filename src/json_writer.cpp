@@ -15,18 +15,26 @@ std::ostream& operator<<(std::ostream& out, quote func) {
   return func(out);
 }
 
-void JSON_writer::object_open() {
+void JSON_writer::object_open() { scope_open('{'); }
+
+void JSON_writer::object_close() { scope_close('}'); }
+
+void JSON_writer::list_open() { scope_open('['); }
+
+void JSON_writer::list_close() { scope_close(']'); }
+
+void JSON_writer::scope_open(char delim) {
   next_element();
-  out << indent(depth++) << "{\n";
+  out << indent(depth++) << delim << '\n';
   first_child.push(true);
 }
 
-void JSON_writer::object_close() {
+void JSON_writer::scope_close(char delim) {
   if (!first_child.top()) {
     out << '\n';
   }
 
-  out << indent(--depth) << '}';
+  out << indent(--depth) << delim;
   first_child.pop();
 }
 
@@ -56,6 +64,7 @@ void JSON_writer::scalar_write(const std::string& key,
   std::copy(base64_iterator(value),
             base64_iterator(value + length),
             std::ostream_iterator<char>(out));
+//  std::copy(value, value + length, std::ostream_iterator<char>(out));
   out << '"';
 }
 

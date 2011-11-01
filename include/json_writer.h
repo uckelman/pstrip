@@ -74,6 +74,9 @@ public:
   void object_open();
   void object_close();
 
+  void list_open();
+  void list_close();
+
   template <typename T> void scalar_write(const std::string& key,
                                           const T& value) 
   {
@@ -90,6 +93,9 @@ public:
 
 private:
   void next_element();
+
+  void scope_open(char delim);
+  void scope_close(char delim);
 
   std::ostream& out;
   unsigned int depth;
