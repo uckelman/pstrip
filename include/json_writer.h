@@ -67,9 +67,7 @@ std::ostream& operator<<(std::ostream& out, quote func);
 
 class JSON_writer {
 public:
-  JSON_writer(std::ostream& o): out(o), depth(0) {
-    first_child.push(true);
-  } 
+  JSON_writer(std::ostream& o);
 
   void object_open();
   void object_close();
@@ -77,12 +75,21 @@ public:
   void array_open();
   void array_close();
 
+  void object_member_open(const std::string& key);
+  void object_member_close();
+
+  void array_member_open(const std::string& key);
+  void array_member_close();
+
   template <typename T> void scalar_write(const std::string& key,
                                           const T& value) 
   {
     next_element();
-    out << indent(depth) << quote(key) << KVSEP << value;
+    write_key(key);
+    out << value;
   }
+
+  void null_write(const std::string& key);
 
   void scalar_write(const std::string& key, const std::string& value);
   void scalar_write(const std::string& key, char* value);
@@ -93,9 +100,13 @@ public:
 
 private:
   void next_element();
+  void write_key(const std::string& key);
 
   void scope_open(char delim);
   void scope_close(char delim);
+
+  void member_scope_open(char delim);
+  void member_scope_close(char delim);
 
   std::ostream& out;
   unsigned int depth;

@@ -21,19 +21,32 @@ typedef boost::shared_ptr<libpff_multi_value_t> MultiValuePtr;
 
 class libpff_error: public std::exception {
 public:
-  libpff_error(libpff_error_t*& error) {
-    libpff_error_sprint(error, msg, MAXLEN);
+  libpff_error(libpff_error_t*& error, uint32_t line) {
+    std::stringstream ss;
+    ss << line << ": ";
+
+    char buf[MAXLEN];
+    libpff_error_sprint(error, buf, MAXLEN);
     libpff_error_free(&error);
+    ss << buf;
+
+    msg = ss.str();
+  }
+
+  libpff_error(const std::string& s, uint32_t line) {
+    std::stringstream ss;
+    ss << line << ": " << s;
+    msg = ss.str();
   }
 
   virtual ~libpff_error() throw() {}
 
-  virtual const char* what() const throw() { return msg; }
+  virtual const char* what() const throw() { return msg.c_str(); }
 
 private:
   static const size_t MAXLEN = 1024;
 
-  char msg[MAXLEN];
+  std::string msg;
 };
 
 libpff_file_t* create_file(const char* filename) {
@@ -41,11 +54,11 @@ libpff_file_t* create_file(const char* filename) {
   libpff_error_t* error = 0;
 
   if (libpff_file_initialize(&file, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
   
   if (libpff_file_open(file, filename, LIBPFF_OPEN_READ, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
   return file;
@@ -55,11 +68,11 @@ void destroy_file(libpff_file_t* file) {
   libpff_error_t* error = 0;
 
   if (libpff_file_close(file, &error) != 0) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
   if (libpff_file_free(&file, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 }
 
@@ -68,7 +81,7 @@ libpff_item_t* get_root(libpff_file_t* file) {
   libpff_error_t* error = 0;
 
   if (libpff_file_get_root_item(file, &root, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
   
   return root;
@@ -79,7 +92,7 @@ libpff_item_t* get_child(libpff_item_t* parent, int pos) {
   libpff_error_t* error = 0;
 
   if (libpff_item_get_sub_item(parent, pos, &child, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
   
   return child;
@@ -90,17 +103,39 @@ libpff_item_t* get_unknowns(libpff_item_t* folder) {
   libpff_error_t* error = 0;
 
   if (libpff_folder_get_unknowns(folder, &unknowns, &error) == -1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
   return unknowns;
+}
+
+libpff_item_t* get_orphan(libpff_file_t* file, int pos) {
+  libpff_item_t* orphan = 0;
+  libpff_error_t* error = 0;
+
+  if (libpff_file_get_orphan_item(file, pos, &orphan, &error) != 1) {
+    throw libpff_error(error, __LINE__);
+  }
+  
+  return orphan;
+}
+
+libpff_item_t* get_recovered(libpff_file_t* file, int pos) {
+  libpff_item_t* rec = 0;
+  libpff_error_t* error = 0;
+
+  if (libpff_file_get_recovered_item(file, pos, &rec, &error) != 1) {
+    throw libpff_error(error, __LINE__);
+  }
+  
+  return rec;
 }
 
 void destroy_item(libpff_item_t* item) {
   libpff_error_t* error = 0;
 
   if (libpff_item_free(&item, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 }
 
@@ -108,8 +143,8 @@ libpff_multi_value_t* get_multivalue(libpff_item_t* item, uint32_t s, uint32_t e
   libpff_multi_value_t* mv = 0;
   libpff_error_t* error = 0;
 
-  if (libpff_item_get_entry_multi_value(item, s, etype, &mv, flags, &error) != 1) {
-    throw libpff_error(error);
+  if (libpff_item_get_entry_multi_value(item, s, etype, &mv, flags, &error) == -1) {
+    throw libpff_error(error, __LINE__);
   }
 
   return mv;
@@ -119,7 +154,7 @@ void destroy_multivalue(libpff_multi_value_t* mv) {
   libpff_error_t* error = 0;
   
   if (libpff_multi_value_free(&mv, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 }
 
@@ -435,17 +470,16 @@ void write_single_value(
 
   switch (vtype) {
   case LIBPFF_VALUE_TYPE_UNSPECIFIED:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_NULL:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
+    json.null_write(key);
     break;
   case LIBPFF_VALUE_TYPE_INTEGER_16BIT_SIGNED:
     {
       uint16_t val;
       switch (libpff_item_get_entry_value_16bit(item, si, etype, &val, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -459,7 +493,7 @@ void write_single_value(
       uint32_t val;
       switch (libpff_item_get_entry_value_32bit(item, si, etype, &val, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -474,7 +508,7 @@ void write_single_value(
       double val;
       switch (libpff_item_get_entry_value_floating_point(item, si, etype, &val, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -484,20 +518,17 @@ void write_single_value(
     }
     break;
   case LIBPFF_VALUE_TYPE_CURRENCY:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_APPLICATION_TIME:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_ERROR:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_BOOLEAN:
     {
       uint8_t val;
       switch (libpff_item_get_entry_value_boolean(item, si, etype, &val, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -507,14 +538,13 @@ void write_single_value(
     }
     break;
   case LIBPFF_VALUE_TYPE_OBJECT:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_INTEGER_64BIT_SIGNED:
     {
       uint64_t val;
       switch (libpff_item_get_entry_value_64bit(item, si, etype, &val, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -524,21 +554,20 @@ void write_single_value(
     }
     break;
   case LIBPFF_VALUE_TYPE_STRING_ASCII:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_STRING_UNICODE:
     {
       size_t len;
       switch (libpff_item_get_entry_value_utf8_string_size(item, si, etype, &len, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
         {
           boost::scoped_array<uint8_t> buf(new uint8_t[len]);
           if (libpff_item_get_entry_value_utf8_string(item, si, etype, buf.get(), len, flags, &error) != 1) {
-            throw libpff_error(error);
+            throw libpff_error(error, __LINE__);
           }
 
           json.scalar_write(key, (const char*) buf.get());
@@ -552,7 +581,7 @@ void write_single_value(
       uint64_t ts;
       switch (libpff_item_get_entry_value_filetime(item, si, etype, &ts, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -566,7 +595,7 @@ void write_single_value(
       size_t len;
       switch (libpff_item_get_entry_value_size(item, si, etype, &len, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -574,7 +603,7 @@ void write_single_value(
 // FIXME: will this be a printable string?
           boost::scoped_array<uint8_t> buf(new uint8_t[len+1]);
           if (libpff_item_get_entry_value_guid(item, si, etype, buf.get(), len, flags, &error) != 1) {
-            throw libpff_error(error);
+            throw libpff_error(error, __LINE__);
           }
 
           json.scalar_write(key, (const char*) buf.get());
@@ -584,27 +613,24 @@ void write_single_value(
     }
     break;
   case LIBPFF_VALUE_TYPE_SERVER_IDENTIFIER:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_RESTRICTION:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_RULE_ACTION:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_BINARY_DATA:
     {
       size_t len;
       switch (libpff_item_get_entry_value_binary_data_size(item, si, etype, &len, flags, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
         {
           boost::scoped_array<uint8_t> buf(new uint8_t[len]);
           if (libpff_item_get_entry_value_binary_data(item, si, etype, buf.get(), len, flags, &error) != 1) {
-            throw libpff_error(error);
+            throw libpff_error(error, __LINE__);
           }
 
           json.scalar_write(key, buf.get(), len);
@@ -612,7 +638,6 @@ void write_single_value(
         break;
       }
     }
-//    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
   }
 }
 
@@ -624,6 +649,8 @@ void write_multi_value(
   uint8_t flags,
   JSON_writer& json)
 {
+// FIXME: This is way broken.
+
   libpff_error_t* error = 0;
 
   std::string key(entry_type_string(etype));
@@ -633,49 +660,41 @@ void write_multi_value(
       
   int vcount;
   if (libpff_multi_value_get_number_of_values(mv, &vcount, &error) == -1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
-  json.list_open();
+  json.array_member_open(key);
 
   switch (vtype) {
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_INTEGER_16BIT_SIGNED:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_INTEGER_32BIT_SIGNED:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_FLOAT_32BIT:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_DOUBLE_64BIT:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_CURRENCY:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_APPLICATION_TIME:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_INTEGER_64BIT_SIGNED:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_STRING_ASCII:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_STRING_UNICODE:
     for (int i = 0; i < vcount; ++i) {
       size_t len;
       switch (libpff_multi_value_get_value_utf8_string_size(mv, i, &len, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
         {
           boost::scoped_array<uint8_t> buf(new uint8_t[len]);
           if (libpff_multi_value_get_value_utf8_string(mv, i, buf.get(), len, &error) != 1) {
-            throw libpff_error(error);
+            throw libpff_error(error, __LINE__);
           }
 
           json.scalar_write(key, (const char*) buf.get());
@@ -689,7 +708,7 @@ void write_multi_value(
       uint64_t ts;
       switch (libpff_multi_value_get_value_filetime(mv, i, &ts, &error)) {
       case -1:
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       case  0:
         break;
       case  1:
@@ -699,12 +718,12 @@ void write_multi_value(
     }
     break;
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_GUID:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_MULTI_VALUE_BINARY_DATA:
-    json.scalar_write(key, "!!!" + boost::lexical_cast<std::string>(__LINE__) + "!!!");
-    break;
+    throw libpff_error(key, __LINE__);
   }
+
+  json.array_member_close();
 }
 
 void write_entry(
@@ -715,8 +734,6 @@ void write_entry(
   uint8_t flags,
   JSON_writer& json)
 {  
-  libpff_error_t* error = 0;
-
   if (vtype & LIBPFF_VALUE_TYPE_MULTI_VALUE_FLAG) {
     write_multi_value(item, si, etype, vtype, flags, json);
   }
@@ -733,7 +750,7 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer&
   libpff_name_to_id_map_entry_t* nkey = 0;
 
   if (libpff_item_get_entry_type(item, s, e, &etype, &vtype, &nkey, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
   json.scalar_write("entry type", etype);
@@ -743,13 +760,13 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer&
     if (nkey) {
       uint8_t ntype;
       if (libpff_name_to_id_map_entry_get_type(nkey, &ntype, &error) != 1) {
-        throw libpff_error(error);
+        throw libpff_error(error, __LINE__);
       }
 
       if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_NUMERIC) {
         uint32_t nnum;
         if (libpff_name_to_id_map_entry_get_number(nkey, &nnum, &error) != 1) {
-          throw libpff_error(error);
+          throw libpff_error(error, __LINE__);
         }
 
         json.scalar_write("maps to entry type", nnum);
@@ -757,12 +774,12 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer&
       else if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_STRING) {
         size_t len;
         if (libpff_name_to_id_map_entry_get_utf8_string_size(nkey, &len, &error) != 1) {
-          throw libpff_error(error);
+          throw libpff_error(error, __LINE__);
         }
 
         boost::scoped_array<uint8_t> buf(new uint8_t[len]);
         if (libpff_name_to_id_map_entry_get_utf8_string(nkey, buf.get(), len, &error) != 1) {
-          throw libpff_error(error);
+          throw libpff_error(error, __LINE__);
         }
 
         json.scalar_write("maps to entry", (const char*) buf.get());
@@ -778,7 +795,7 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, JSON_writer&
   size_t len;
 
   if (libpff_item_get_entry_value(item, s, etype, &matched_vtype, &vdata, &len, LIBPFF_ENTRY_VALUE_FLAG_MATCH_ANY_VALUE_TYPE | LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
   json.scalar_write("matched value type", matched_vtype);
@@ -802,28 +819,28 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
   // number of sets
   uint32_t sets;
   if (libpff_item_get_number_of_sets(item, &sets, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
-  json.scalar_write("sets", sets);
+  json.scalar_write("number of sets", sets);
 
   // number of entries per set
   uint32_t entries;
   if (libpff_item_get_number_of_entries(item, &entries, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
   json.scalar_write("entries per set", entries);
 
+  json.array_member_open("sets");
+
   // iterate over sets
   for (uint32_t s = 0; s < sets; ++s) {
-    json.object_open();
-    json.scalar_write("set", s);
+    json.array_open();
 
     // iterate over entries
     for (uint32_t e = 0; e < entries; ++e) {
-      json.object_open();
-      json.scalar_write("entry", e);
+      json.array_open();
 
       try {
         handle_item_value(item, s, e, json);
@@ -832,42 +849,13 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
         std::cerr << "Error: " << e.what() << std::endl;
       }
 
-      json.object_close();
+      json.array_close();
     }
 
-    json.object_close();
+    json.array_close();
   }
-}
 
-void handle_folder(libpff_item_t* folder, JSON_writer& json) {
-  // export_handle_export_folder
-
-  /*
-  // unknowns
-  try {
-    // export_handle_export_unknowns
-    ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
-    if (unknownsp) {
-      json.object_open();
-
-      libpff_item_t* unknowns = unknownsp.get();
-
-      uint32_t ucount;
-      if (libpff_item_get_number_of_sets(unknowns, &ucount, &error) == -1) {
-        throw libpff_error(error);
-      }
-
-      for (uint32_t u = 0; u < ucount; ++u) {
-        // FIXME: do something here?
-      }
-
-      json.object_close();
-    }
-  }
-  catch (const libpff_error& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-  }
-  */
+  json.array_member_close();
 }
 
 void handle_subitems(libpff_item_t* item, JSON_writer& json) {
@@ -875,83 +863,196 @@ void handle_subitems(libpff_item_t* item, JSON_writer& json) {
 
   int children;
   if (libpff_item_get_number_of_sub_items(item, &children, &error) != 1) {
-    throw libpff_error(error);
+    throw libpff_error(error, __LINE__);
   }
 
-  for (int i = 0; i < children; ++i) {
-    try {
-      ItemPtr childp(get_child(item, i), &destroy_item);
-      handle_item(childp.get(), json);
+  if (children > 0) {
+    json.array_member_open("subitems");
+
+    for (int i = 0; i < children; ++i) {
+      try {
+        ItemPtr childp(get_child(item, i), &destroy_item);
+        handle_item(childp.get(), json);
+      }
+      catch (const libpff_error& e) {
+        std::cerr << "Error: " << e.what() << std::endl; 
+      }
     }
-    catch (const libpff_error& e) {
-      std::cerr << "Error: " << e.what() << std::endl; 
+
+    json.array_member_close();
+  }
+}
+
+void handle_unknowns(libpff_item_t* folder, JSON_writer& json) {
+  ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
+  if (unknownsp) {
+    libpff_item_t* unknowns = unknownsp.get();
+
+    libpff_error_t* error = 0;
+
+    uint32_t ucount;
+    if (libpff_item_get_number_of_sets(unknowns, &ucount, &error) == -1) {
+      throw libpff_error(error, __LINE__);
     }
+
+    json.array_member_open("unknowns");
+
+    for (uint32_t u = 0; u < ucount; ++u) {
+      // FIXME: do something here?
+    }
+
+    json.array_member_close();
   }
 }
 
 void handle_item(libpff_item_t* item, JSON_writer& json) {
-  // export_handle_export_items
-
   json.object_open();
 
   libpff_error_t* error = 0;
 
+  // item type
+  uint8_t itype = LIBPFF_ITEM_TYPE_UNDEFINED;
   try {
-    // item type
-    uint8_t itype;
     if (libpff_item_get_type(item, &itype, &error) != 1) {
-      throw libpff_error(error);
+      throw libpff_error(error, __LINE__);
     }
- 
     json.scalar_write("type", item_type_string(itype));
-
-    // identifier
-    try {
-      uint32_t id;
-      if (libpff_item_get_identifier(item, &id, &error) != 1) {
-        throw libpff_error(error);
-      }
-      json.scalar_write("identifier", id);
-    }
-    catch (const libpff_error& e) {
-      std::cerr << "Error: " << e.what() << std::endl;
-    }
-
-    // item values
-    try {
-      handle_item_values(item, json);
-    }
-    catch (const libpff_error& e) {
-      std::cerr << "Error: " << e.what() << std::endl;
-    }
-
-    // process children
-    try {
-      handle_subitems(item, json);
-    }
-    catch (const libpff_error& e) {
-      std::cerr << "Error: " << e.what() << std::endl; 
-    }
   }
   catch (const libpff_error& e) {
     std::cerr << "Error: " << e.what() << std::endl;
-    json.scalar_write("bad", "bad!"); 
   }
 
-  json.object_close();
-}
-
-void handle_root(libpff_item_t* root, JSON_writer& json) {
-  json.object_open();
-
+  // identifier
   try {
-    handle_subitems(root, json);
+    uint32_t id;
+    if (libpff_item_get_identifier(item, &id, &error) != 1) {
+      throw libpff_error(error, __LINE__);
+    }
+    json.scalar_write("identifier", id);
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+
+  // item values
+  try {
+    handle_item_values(item, json);
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+  }
+
+  // process children
+  try {
+    handle_subitems(item, json);
   }
   catch (const libpff_error& e) {
     std::cerr << "Error: " << e.what() << std::endl; 
   }
 
+  // process unknowns, for folders only
+  if (itype == LIBPFF_ITEM_TYPE_FOLDER) {
+    try {
+      handle_unknowns(item, json);    
+    }
+    catch (const libpff_error& e) {
+      std::cerr << "Error: " << e.what() << std::endl;
+    }
+  }
+
   json.object_close();
+}
+
+void handle_tree(libpff_file_t* file, JSON_writer& json) {
+  ItemPtr rootp(get_root(file), &destroy_item);
+  libpff_item_t* root = rootp.get();
+
+  libpff_error_t* error = 0;
+  try {
+    int children;
+    if (libpff_item_get_number_of_sub_items(root, &children, &error) != 1) {
+      throw libpff_error(error, __LINE__);
+    }
+
+    if (children > 0) {
+      json.array_member_open("items");
+
+      for (int i = 0; i < children; ++i) {
+        try {
+          ItemPtr childp(get_child(root, i), &destroy_item);
+          handle_item(childp.get(), json);
+        }
+        catch (const libpff_error& e) {
+          std::cerr << "Error: " << e.what() << std::endl; 
+        }
+      }
+    
+      json.array_member_close();
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl; 
+  }
+}
+
+void handle_orphans(libpff_file_t* file, JSON_writer& json) {
+  libpff_error_t* error = 0;
+
+  try {
+    int orphans;
+    if (libpff_file_get_number_of_orphan_items(file, &orphans, &error) == -1) {
+      throw libpff_error(error, __LINE__); 
+    }
+
+    if (orphans > 0) {
+      json.array_member_open("orphans");
+
+      for (int i = 0; i < orphans; ++i) {
+        try {
+          ItemPtr orphanp(get_orphan(file, i), &destroy_item);
+          handle_item(orphanp.get(), json);
+        }
+        catch (const libpff_error& e) {
+          std::cerr << "Error: " << e.what() << std::endl; 
+        }
+      }
+
+      json.array_member_close();
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl; 
+  }
+}
+
+void handle_recovered(libpff_file_t* file, JSON_writer& json) {
+  libpff_error_t* error = 0;
+
+  try {
+    int recovered;
+    if (libpff_file_get_number_of_recovered_items(file, &recovered, &error) == -1) { 
+      throw libpff_error(error, __LINE__);
+    }
+ 
+    if (recovered > 0) {
+      json.array_member_open("recovered"); 
+
+      for (int i = 0; i < recovered; ++i) {
+        try {
+          ItemPtr recp(get_recovered(file, i), &destroy_item);
+          handle_item(recp.get(), json);
+        }
+        catch (const libpff_error& e) {
+          std::cerr << "Error: " << e.what() << std::endl; 
+        }
+      }
+
+      json.array_member_close();
+    }
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << e.what() << std::endl; 
+  }
 }
 
 int main(int argc, char** argv) {
@@ -964,13 +1065,14 @@ int main(int argc, char** argv) {
     FilePtr filep(create_file(argv[1]), &destroy_file);
     libpff_file_t* file = filep.get();
 
-    // find the root
-    ItemPtr rootp(get_root(file), &destroy_item);
-    libpff_item_t* root = rootp.get();
-
-    // process the tree
+    // process the file
     JSON_writer json(std::cout);
-    handle_root(root, json);
+
+    json.object_open();
+    handle_tree(file, json);
+    handle_orphans(file, json);
+    handle_recovered(file, json);
+    json.object_close();
   }
   catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;

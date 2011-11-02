@@ -15,6 +15,10 @@ std::ostream& operator<<(std::ostream& out, quote func) {
   return func(out);
 }
 
+JSON_writer::JSON_writer(std::ostream& o): out(o), depth(0) {
+  first_child.push(true);
+}
+
 void JSON_writer::object_open() { scope_open('{'); }
 
 void JSON_writer::object_close() { scope_close('}'); }
@@ -38,10 +42,41 @@ void JSON_writer::scope_close(char delim) {
   first_child.pop();
 }
 
+void JSON_writer::member_scope_open(char delim) {
+  out << delim << '\n';
+  ++depth;
+  first_child.push(true);
+}
+
+void JSON_writer::member_scope_close(char delim) { scope_close(delim); }
+
+void JSON_writer::object_member_open(const std::string& key) {
+  next_element();
+  write_key(key);
+  member_scope_open('{');
+}
+
+void JSON_writer::object_member_close() { member_scope_close('}'); }
+
+void JSON_writer::array_member_open(const std::string& key) {
+  next_element();
+  write_key(key);
+  member_scope_open('[');
+}
+
+void JSON_writer::array_member_close() { member_scope_close(']'); }
+
+void JSON_writer::null_write(const std::string& key) {
+  next_element();
+  write_key(key);
+  out << "null";
+}
+
 void JSON_writer::scalar_write(const std::string& key, const std::string& value)
 {
   next_element();
-  out << indent(depth) << quote(key) << KVSEP << quote(value);
+  write_key(key);
+  out << quote(value);
 }
 
 void JSON_writer::scalar_write(const std::string& key, char* value)
@@ -75,4 +110,8 @@ void JSON_writer::next_element() {
   else {
     out << ",\n";
   }
+}
+
+void JSON_writer::write_key(const std::string& key) {
+  out << indent(depth) << quote(key) << KVSEP;
 }
