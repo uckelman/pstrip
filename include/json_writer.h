@@ -74,8 +74,8 @@ public:
   void object_open();
   void object_close();
 
-  void list_open();
-  void list_close();
+  void array_open();
+  void array_close();
 
   template <typename T> void scalar_write(const std::string& key,
                                           const T& value) 

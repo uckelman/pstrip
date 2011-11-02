@@ -19,9 +19,9 @@ void JSON_writer::object_open() { scope_open('{'); }
 
 void JSON_writer::object_close() { scope_close('}'); }
 
-void JSON_writer::list_open() { scope_open('['); }
+void JSON_writer::array_open() { scope_open('['); }
 
-void JSON_writer::list_close() { scope_close(']'); }
+void JSON_writer::array_close() { scope_close(']'); }
 
 void JSON_writer::scope_open(char delim) {
   next_element();
