@@ -840,7 +840,7 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
 
     // iterate over entries
     for (uint32_t e = 0; e < entries; ++e) {
-      json.array_open();
+      json.object_open();
 
       try {
         handle_item_value(item, s, e, json);
@@ -849,7 +849,7 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
         std::cerr << "Error: " << e.what() << std::endl;
       }
 
-      json.array_close();
+      json.object_close();
     }
 
     json.array_close();
