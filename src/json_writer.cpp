@@ -95,11 +95,21 @@ void JSON_writer::scalar_write(const std::string& key,
                                const unsigned char* value, size_t length) {
   next_element();
   out << indent(depth) << quote(key) << KVSEP << '"';
-// FIXME: does this pad correctly?
+
   std::copy(base64_iterator(value),
             base64_iterator(value + length),
             std::ostream_iterator<char>(out));
-//  std::copy(value, value + length, std::ostream_iterator<char>(out));
+
+  // base64_iterator doesn't pad, so we have to do it
+  switch (length % 3) {
+  case 2:
+    out << '=';
+  case 1:
+    out << '=';
+  case 0:
+    break;
+  }
+
   out << '"';
 }
 
