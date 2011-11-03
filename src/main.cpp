@@ -868,7 +868,14 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
   json.array_member_close();
 }
 
-template <typename T> void handle_items_loop(T item_getter, int num, const std::string& path, JSON_writer& json) {
+template <typename C, typename G> void handle_items_loop(C item_count_getter, G item_getter, const std::string& path, JSON_writer& json) {
+  libpff_error_t* error = 0;
+
+  int num;
+  if (item_count_getter(&num, &error) != 1) {
+    throw libpff_error(error, __LINE__);
+  }
+
   if (num > 0) {
     for (int i = 0; i < num; ++i) {
       try {
@@ -883,14 +890,11 @@ template <typename T> void handle_items_loop(T item_getter, int num, const std::
 }
 
 void handle_subitems(libpff_item_t* item, const std::string& path, JSON_writer& json) {
-  libpff_error_t* error = 0;
-
-  int num;
-  if (libpff_item_get_number_of_sub_items(item, &num, &error) != 1) {
-    throw libpff_error(error, __LINE__);
-  }
-
-  handle_items_loop(boost::bind(&get_child, item, _1), num, path + '/', json);
+  handle_items_loop(
+    boost::bind(&libpff_item_get_number_of_sub_items, item, _1, _2),
+    boost::bind(&get_child, item, _1),
+    path + '/', json
+  );
 }
 
 void handle_unknowns(libpff_item_t* folder, const std::string& path, JSON_writer& json) {
@@ -976,16 +980,10 @@ void handle_tree(libpff_file_t* file, const std::string& filename, JSON_writer& 
 }
 
 void handle_orphans(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
-  libpff_error_t* error = 0;
-
   try {
-    int num;
-    if (libpff_file_get_number_of_orphan_items(file, &num, &error) == -1) {
-      throw libpff_error(error, __LINE__); 
-    }
-
     handle_items_loop(
-      boost::bind(&get_orphan, file, _1), num,
+      boost::bind(&libpff_file_get_number_of_orphan_items, file, _1, _2),
+      boost::bind(&get_orphan, file, _1),
       '/' + filename + "/orphans/", json
     );
   }
@@ -995,16 +993,10 @@ void handle_orphans(libpff_file_t* file, const std::string& filename, JSON_write
 }
 
 void handle_recovered(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
-  libpff_error_t* error = 0;
-
   try {
-    int num;
-    if (libpff_file_get_number_of_recovered_items(file, &num, &error) == -1) { 
-      throw libpff_error(error, __LINE__);
-    }
- 
     handle_items_loop(
-      boost::bind(&get_recovered, file, _1), num,
+      boost::bind(&libpff_file_get_number_of_recovered_items, file, _1, _2),
+      boost::bind(&get_recovered, file, _1),
       '/' + filename + "/recovered/", json
     );
   }
