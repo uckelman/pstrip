@@ -1,19 +1,29 @@
 
-#include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 
+#include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/scoped_array.hpp>
-#include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include <libpff.h>
 #include <libpff/mapi.h>
 
-#include "main.h"
+#include "json_writer.h"
+
+template <typename L, typename R> std::string operator+(L left, R right) {
+  std::ostringstream os;
+  os << left << right;
+  return os.str();
+}
+
+void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json);
 
 typedef boost::shared_ptr<libpff_file_t> FilePtr;
 typedef boost::shared_ptr<libpff_item_t> ItemPtr;
@@ -858,32 +868,33 @@ void handle_item_values(libpff_item_t* item, JSON_writer& json) {
   json.array_member_close();
 }
 
-void handle_subitems(libpff_item_t* item, JSON_writer& json) {
-  libpff_error_t* error = 0;
-
-  int children;
-  if (libpff_item_get_number_of_sub_items(item, &children, &error) != 1) {
-    throw libpff_error(error, __LINE__);
-  }
-
-  if (children > 0) {
-    json.array_member_open("subitems");
-
-    for (int i = 0; i < children; ++i) {
+template <typename T> void handle_items_loop(T item_getter, int num, const std::string& path, JSON_writer& json) {
+  if (num > 0) {
+    for (int i = 0; i < num; ++i) {
       try {
-        ItemPtr childp(get_child(item, i), &destroy_item);
-        handle_item(childp.get(), json);
+        ItemPtr itemp(item_getter(i), &destroy_item);
+        handle_item(itemp.get(), path + i, json);
       }
       catch (const libpff_error& e) {
         std::cerr << "Error: " << e.what() << std::endl; 
       }
     }
-
-    json.array_member_close();
   }
 }
 
+void handle_subitems(libpff_item_t* item, const std::string& path, JSON_writer& json) {
+  libpff_error_t* error = 0;
+
+  int num;
+  if (libpff_item_get_number_of_sub_items(item, &num, &error) != 1) {
+    throw libpff_error(error, __LINE__);
+  }
+
+  handle_items_loop(boost::bind(&get_child, item, _1), num, path + '/', json);
+}
+
 void handle_unknowns(libpff_item_t* folder, JSON_writer& json) {
+/*
   ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
   if (unknownsp) {
     libpff_item_t* unknowns = unknownsp.get();
@@ -903,12 +914,16 @@ void handle_unknowns(libpff_item_t* folder, JSON_writer& json) {
 
     json.array_member_close();
   }
+*/
 }
 
-void handle_item(libpff_item_t* item, JSON_writer& json) {
+void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json) {
   json.object_open();
 
   libpff_error_t* error = 0;
+
+  // path
+  json.scalar_write("path", path);
 
   // item type
   uint8_t itype = LIBPFF_ITEM_TYPE_UNDEFINED;
@@ -942,14 +957,18 @@ void handle_item(libpff_item_t* item, JSON_writer& json) {
     std::cerr << "Error: " << e.what() << std::endl;
   }
 
+  json.object_close();
+  json.reset();
+
   // process children
   try {
-    handle_subitems(item, json);
+    handle_subitems(item, path, json);
   }
   catch (const libpff_error& e) {
     std::cerr << "Error: " << e.what() << std::endl; 
   }
 
+/*
   // process unknowns, for folders only
   if (itype == LIBPFF_ITEM_TYPE_FOLDER) {
     try {
@@ -959,96 +978,52 @@ void handle_item(libpff_item_t* item, JSON_writer& json) {
       std::cerr << "Error: " << e.what() << std::endl;
     }
   }
-
-  json.object_close();
+*/
 }
 
-void handle_tree(libpff_file_t* file, JSON_writer& json) {
+void handle_tree(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
   ItemPtr rootp(get_root(file), &destroy_item);
-  libpff_item_t* root = rootp.get();
 
-  libpff_error_t* error = 0;
   try {
-    int children;
-    if (libpff_item_get_number_of_sub_items(root, &children, &error) != 1) {
-      throw libpff_error(error, __LINE__);
-    }
-
-    if (children > 0) {
-      json.array_member_open("items");
-
-      for (int i = 0; i < children; ++i) {
-        try {
-          ItemPtr childp(get_child(root, i), &destroy_item);
-          handle_item(childp.get(), json);
-        }
-        catch (const libpff_error& e) {
-          std::cerr << "Error: " << e.what() << std::endl; 
-        }
-      }
-    
-      json.array_member_close();
-    }
+    handle_subitems(rootp.get(), '/' + filename, json);
   }
   catch (const libpff_error& e) {
     std::cerr << "Error: " << e.what() << std::endl; 
   }
 }
 
-void handle_orphans(libpff_file_t* file, JSON_writer& json) {
+void handle_orphans(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
   libpff_error_t* error = 0;
 
   try {
-    int orphans;
-    if (libpff_file_get_number_of_orphan_items(file, &orphans, &error) == -1) {
+    int num;
+    if (libpff_file_get_number_of_orphan_items(file, &num, &error) == -1) {
       throw libpff_error(error, __LINE__); 
     }
 
-    if (orphans > 0) {
-      json.array_member_open("orphans");
-
-      for (int i = 0; i < orphans; ++i) {
-        try {
-          ItemPtr orphanp(get_orphan(file, i), &destroy_item);
-          handle_item(orphanp.get(), json);
-        }
-        catch (const libpff_error& e) {
-          std::cerr << "Error: " << e.what() << std::endl; 
-        }
-      }
-
-      json.array_member_close();
-    }
+    handle_items_loop(
+      boost::bind(&get_orphan, file, _1), num,
+      '/' + filename + "/orphans/", json
+    );
   }
   catch (const libpff_error& e) {
     std::cerr << "Error: " << e.what() << std::endl; 
   }
 }
 
-void handle_recovered(libpff_file_t* file, JSON_writer& json) {
+void handle_recovered(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
   libpff_error_t* error = 0;
 
   try {
-    int recovered;
-    if (libpff_file_get_number_of_recovered_items(file, &recovered, &error) == -1) { 
+    int num;
+    if (libpff_file_get_number_of_recovered_items(file, &num, &error) == -1) { 
       throw libpff_error(error, __LINE__);
     }
  
-    if (recovered > 0) {
-      json.array_member_open("recovered"); 
-
-      for (int i = 0; i < recovered; ++i) {
-        try {
-          ItemPtr recp(get_recovered(file, i), &destroy_item);
-          handle_item(recp.get(), json);
-        }
-        catch (const libpff_error& e) {
-          std::cerr << "Error: " << e.what() << std::endl; 
-        }
-      }
-
-      json.array_member_close();
-    }
+    handle_items_loop(
+      boost::bind(&get_recovered, file, _1), num,
+      '/' + filename + "/recovered/", json
+    );
   }
   catch (const libpff_error& e) {
     std::cerr << "Error: " << e.what() << std::endl; 
@@ -1065,14 +1040,14 @@ int main(int argc, char** argv) {
     FilePtr filep(create_file(argv[1]), &destroy_file);
     libpff_file_t* file = filep.get();
 
+    std::string filename(std::max(strchr(argv[1], '/') + 1, argv[1]));
+
     // process the file
     JSON_writer json(std::cout);
 
-    json.object_open();
-    handle_tree(file, json);
-    handle_orphans(file, json);
-    handle_recovered(file, json);
-    json.object_close();
+    handle_tree(file, filename, json);
+    handle_orphans(file, filename, json);
+    handle_recovered(file, filename, json);
   }
   catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
