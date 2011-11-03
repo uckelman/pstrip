@@ -893,28 +893,13 @@ void handle_subitems(libpff_item_t* item, const std::string& path, JSON_writer& 
   handle_items_loop(boost::bind(&get_child, item, _1), num, path + '/', json);
 }
 
-void handle_unknowns(libpff_item_t* folder, JSON_writer& json) {
-/*
+void handle_unknowns(libpff_item_t* folder, const std::string& path, JSON_writer& json) {
+  // FIXME: These are known unknowns, in the Rumsfeldian sense.
+  // I.e., we know that we have no idea wtf these are.
   ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
   if (unknownsp) {
-    libpff_item_t* unknowns = unknownsp.get();
-
-    libpff_error_t* error = 0;
-
-    uint32_t ucount;
-    if (libpff_item_get_number_of_sets(unknowns, &ucount, &error) == -1) {
-      throw libpff_error(error, __LINE__);
-    }
-
-    json.array_member_open("unknowns");
-
-    for (uint32_t u = 0; u < ucount; ++u) {
-      // FIXME: do something here?
-    }
-
-    json.array_member_close();
+    handle_item(unknownsp.get(), path + "/unknowns", json);
   }
-*/
 }
 
 void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json) {
@@ -968,17 +953,15 @@ void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json
     std::cerr << "Error: " << e.what() << std::endl; 
   }
 
-/*
   // process unknowns, for folders only
   if (itype == LIBPFF_ITEM_TYPE_FOLDER) {
     try {
-      handle_unknowns(item, json);    
+      handle_unknowns(item, path, json);    
     }
     catch (const libpff_error& e) {
       std::cerr << "Error: " << e.what() << std::endl;
     }
   }
-*/
 }
 
 void handle_tree(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
