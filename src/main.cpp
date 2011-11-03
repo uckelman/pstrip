@@ -231,7 +231,7 @@ std::string item_type_string(uint32_t itype) {
   case LIBPFF_ITEM_TYPE_UNKNOWN:
     return "UNKNOWN";
   default:
-    return "!!!";
+    return "UNRECOGNIZED";
   }
 }
 
@@ -462,7 +462,7 @@ std::string entry_type_string(uint32_t etype) {
   case LIBPFF_ENTRY_TYPE_MESSAGE_REMINDER_SIGNAL_TIME:
     return "MESSAGE_REMINDER_SIGNAL_TIME";
   default:
-    return "!!!";
+    return "UNRECOGNIZED";
   }
 }
 
