@@ -821,8 +821,6 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, const std::s
 }
 
 void handle_item_values(libpff_item_t* item, const std::string& path, JSON_writer& json) {
-  // export_handle_export_item_values
-
   libpff_error_t* error = 0;
 
   // number of sets
@@ -999,11 +997,30 @@ void handle_orphans(libpff_file_t* file, const std::string& filename, JSON_write
 }
 
 void handle_recovered(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
-  handle_items_loop(
-    boost::bind(&libpff_file_get_number_of_recovered_items, file, _1, _2),
-    boost::bind(&get_recovered, file, _1),
-    '/' + filename + "/recovered", json
-  );
+  std::string path( '/' + filename + "/recovered");
+
+  try {
+/*
+  TODO: Not sure we're using this correctly.
+
+  TODO: which flags to use?
+    LIBPFF_RECOVERY_FLAG_IGNORE_ALLOCATION_DATA
+    LIBPFF_RECOVERY_FLAG_SCAN_FOR_FRAGMENTS
+*/
+    libpff_error_t* error = 0;
+    if (libpff_file_recover_items(file, 0, &error) == -1) {
+      throw libpff_error(error, __LINE__);
+    }
+
+    handle_items_loop(
+      boost::bind(&libpff_file_get_number_of_recovered_items, file, _1, _2),
+      boost::bind(&get_recovered, file, _1),
+      path, json
+    );
+  }
+  catch (const libpff_error& e) {
+    std::cerr << "Error: " << path << ": " << e.what() << std::endl;
+  }
 }
 
 int main(int argc, char** argv) {
