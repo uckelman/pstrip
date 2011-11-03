@@ -113,6 +113,15 @@ void JSON_writer::scalar_write(const std::string& key,
   out << '"';
 }
 
+void JSON_writer::reset() {
+  out << '\n';
+
+  while (!first_child.empty()) { first_child.pop(); }
+  
+  first_child.push(true);
+  depth = 0;
+}
+
 void JSON_writer::next_element() {
   if (first_child.top()) {
     first_child.top() = false;

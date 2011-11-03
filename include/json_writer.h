@@ -98,6 +98,8 @@ public:
   void scalar_write(const std::string& key,
                     const unsigned char* value, size_t length);
 
+  void reset();
+
 private:
   void next_element();
   void write_key(const std::string& key);
