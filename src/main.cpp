@@ -66,7 +66,7 @@ libpff_file_t* create_file(const char* filename) {
   if (libpff_file_initialize(&file, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
-  
+
   if (libpff_file_open(file, filename, LIBPFF_OPEN_READ, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
@@ -93,7 +93,7 @@ libpff_item_t* get_root(libpff_file_t* file) {
   if (libpff_file_get_root_item(file, &root, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
-  
+
   return root;
 }
 
@@ -104,7 +104,7 @@ libpff_item_t* get_child(libpff_item_t* parent, int pos) {
   if (libpff_item_get_sub_item(parent, pos, &child, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
-  
+
   return child;
 }
 
@@ -126,7 +126,7 @@ libpff_item_t* get_orphan(libpff_file_t* file, int pos) {
   if (libpff_file_get_orphan_item(file, pos, &orphan, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
-  
+
   return orphan;
 }
 
@@ -137,7 +137,7 @@ libpff_item_t* get_recovered(libpff_file_t* file, int pos) {
   if (libpff_file_get_recovered_item(file, pos, &rec, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
-  
+
   return rec;
 }
 
@@ -162,7 +162,7 @@ libpff_multi_value_t* get_multivalue(libpff_item_t* item, uint32_t s, uint32_t e
 
 void destroy_multivalue(libpff_multi_value_t* mv) {
   libpff_error_t* error = 0;
-  
+
   if (libpff_multi_value_free(&mv, &error) != 1) {
     throw libpff_error(error, __LINE__);
   }
@@ -507,7 +507,7 @@ void write_single_value(
       case  0:
         break;
       case  1:
-        json.scalar_write(key, (int32_t) val); 
+        json.scalar_write(key, (int32_t) val);
         break;
       }
     }
@@ -522,7 +522,7 @@ void write_single_value(
       case  0:
         break;
       case  1:
-        json.scalar_write(key, val); 
+        json.scalar_write(key, val);
         break;
       }
     }
@@ -558,7 +558,7 @@ void write_single_value(
       case  0:
         break;
       case  1:
-        json.scalar_write(key, (int64_t) val); 
+        json.scalar_write(key, (int64_t) val);
         break;
       }
     }
@@ -595,7 +595,7 @@ void write_single_value(
       case  0:
         break;
       case  1:
-        json.scalar_write(key, ts); 
+        json.scalar_write(key, ts);
         break;
       }
     }
@@ -667,7 +667,7 @@ void write_multi_value(
 
   MultiValuePtr mvp(get_multivalue(item, si, etype, flags), &destroy_multivalue);
   libpff_multi_value_t* mv = mvp.get();
-      
+
   int vcount;
   if (libpff_multi_value_get_number_of_values(mv, &vcount, &error) == -1) {
     throw libpff_error(error, __LINE__);
@@ -722,7 +722,7 @@ void write_multi_value(
       case  0:
         break;
       case  1:
-        json.scalar_write(key, ts); 
+        json.scalar_write(key, ts);
         break;
       }
     }
@@ -743,7 +743,7 @@ void write_entry(
   uint32_t vtype,
   uint8_t flags,
   JSON_writer& json)
-{  
+{
   if (vtype & LIBPFF_VALUE_TYPE_MULTI_VALUE_FLAG) {
     write_multi_value(item, si, etype, vtype, flags, json);
   }
