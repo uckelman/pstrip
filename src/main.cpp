@@ -466,6 +466,85 @@ std::string entry_type_string(uint32_t etype) {
   }
 }
 
+template <typename L, typename G> void write_binary_value(
+  L length_getter,
+  G value_getter,
+  libpff_item_t* item,
+  uint32_t si,
+  uint32_t etype,
+  uint8_t flags,
+  const std::string& key,
+  JSON_writer& json)
+{
+  libpff_error_t* error = 0;
+  size_t len;
+  switch (length_getter(item, si, etype, &len, flags, &error)) {
+  case -1:
+    throw libpff_error(error, __LINE__);
+  case  0:
+    break;
+  case  1:
+    boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+    if (value_getter(item, si, etype, buf.get(), len, flags, &error) != 1) {
+      throw libpff_error(error, __LINE__);
+    }
+
+    json.scalar_write(key, buf.get(), len);
+  }
+}
+
+template <typename L, typename G> void write_string_value(
+  L length_getter,
+  G value_getter,
+  libpff_item_t* item,
+  uint32_t si,
+  uint32_t etype,
+  uint8_t flags,
+  const std::string& key,
+  JSON_writer& json)
+{
+  libpff_error_t* error = 0;
+  size_t len;
+  switch (length_getter(item, si, etype, &len, flags, &error)) {
+  case -1:
+    throw libpff_error(error, __LINE__);
+  case  0:
+    break;
+  case  1:
+    {
+      boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+      if (value_getter(item, si, etype, buf.get(), len, flags, &error) != 1) {
+        throw libpff_error(error, __LINE__);
+      }
+
+      json.scalar_write(key, (const char*) buf.get());
+    }
+    break;
+  }
+}
+
+template <typename U, typename S, typename G> void write_numeric_value(
+  G getter,
+  libpff_item_t* item,
+  uint32_t si,
+  uint32_t etype,
+  uint8_t flags,
+  const std::string& key,
+  JSON_writer& json)
+{
+  libpff_error_t* error = 0;
+  U val;
+  switch (getter(item, si, etype, &val, flags, &error)) {
+  case -1:
+    throw libpff_error(error, __LINE__);
+  case  0:
+    break;
+  case  1:
+    json.scalar_write(key, (S) val);
+    break;
+  }
+}
+
 void write_single_value(
   libpff_item_t* item,
   uint32_t si,
@@ -485,47 +564,23 @@ void write_single_value(
     json.null_write(key);
     break;
   case LIBPFF_VALUE_TYPE_INTEGER_16BIT_SIGNED:
-    {
-      uint16_t val;
-      switch (libpff_item_get_entry_value_16bit(item, si, etype, &val, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        json.scalar_write(key, (int16_t) val);
-        break;
-      }
-    }
+    write_numeric_value<uint16_t, int16_t>(
+      &libpff_item_get_entry_value_16bit,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_INTEGER_32BIT_SIGNED:
-    {
-      uint32_t val;
-      switch (libpff_item_get_entry_value_32bit(item, si, etype, &val, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        json.scalar_write(key, (int32_t) val);
-        break;
-      }
-    }
+    write_numeric_value<uint32_t, int32_t>(
+      &libpff_item_get_entry_value_32bit,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_FLOAT_32BIT:
   case LIBPFF_VALUE_TYPE_DOUBLE_64BIT:
-    {
-      double val;
-      switch (libpff_item_get_entry_value_floating_point(item, si, etype, &val, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        json.scalar_write(key, val);
-        break;
-      }
-    }
+    write_numeric_value<double, double>(
+      &libpff_item_get_entry_value_floating_point,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_CURRENCY:
     throw libpff_error(key, __LINE__);
@@ -534,93 +589,41 @@ void write_single_value(
   case LIBPFF_VALUE_TYPE_ERROR:
     throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_BOOLEAN:
-    {
-      uint8_t val;
-      switch (libpff_item_get_entry_value_boolean(item, si, etype, &val, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        json.scalar_write(key, (bool) val);
-        break;
-      }
-    }
+    write_numeric_value<uint8_t, bool>(
+      &libpff_item_get_entry_value_boolean,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_OBJECT:
     throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_INTEGER_64BIT_SIGNED:
-    {
-      uint64_t val;
-      switch (libpff_item_get_entry_value_64bit(item, si, etype, &val, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        json.scalar_write(key, (int64_t) val);
-        break;
-      }
-    }
+    write_numeric_value<uint64_t, int64_t>(
+      &libpff_item_get_entry_value_64bit,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_STRING_ASCII:
     throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_STRING_UNICODE:
-    {
-      size_t len;
-      switch (libpff_item_get_entry_value_utf8_string_size(item, si, etype, &len, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        {
-          boost::scoped_array<uint8_t> buf(new uint8_t[len]);
-          if (libpff_item_get_entry_value_utf8_string(item, si, etype, buf.get(), len, flags, &error) != 1) {
-            throw libpff_error(error, __LINE__);
-          }
-
-          json.scalar_write(key, (const char*) buf.get());
-        }
-        break;
-      }
-    }
+    write_string_value(
+      &libpff_item_get_entry_value_utf8_string_size,
+      &libpff_item_get_entry_value_utf8_string,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_FILETIME:
-    {
-      uint64_t ts;
-      switch (libpff_item_get_entry_value_filetime(item, si, etype, &ts, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        json.scalar_write(key, ts);
-        break;
-      }
-    }
+    write_numeric_value<uint64_t, uint64_t>(
+      &libpff_item_get_entry_value_filetime,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_GUID:
-     {
-      size_t len;
-      switch (libpff_item_get_entry_value_size(item, si, etype, &len, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        {
-// FIXME: will this be a printable string?
-          boost::scoped_array<uint8_t> buf(new uint8_t[len+1]);
-          if (libpff_item_get_entry_value_guid(item, si, etype, buf.get(), len, flags, &error) != 1) {
-            throw libpff_error(error, __LINE__);
-          }
-
-          json.scalar_write(key, (const char*) buf.get());
-        }
-        break;
-      }
-    }
+    // FIXME: will this be a printable string?
+    write_string_value(
+      &libpff_item_get_entry_value_size,
+      &libpff_item_get_entry_value_guid,
+      item, si, etype, flags, key, json
+    );
     break;
   case LIBPFF_VALUE_TYPE_SERVER_IDENTIFIER:
     throw libpff_error(key, __LINE__);
@@ -629,25 +632,12 @@ void write_single_value(
   case LIBPFF_VALUE_TYPE_RULE_ACTION:
     throw libpff_error(key, __LINE__);
   case LIBPFF_VALUE_TYPE_BINARY_DATA:
-    {
-      size_t len;
-      switch (libpff_item_get_entry_value_binary_data_size(item, si, etype, &len, flags, &error)) {
-      case -1:
-        throw libpff_error(error, __LINE__);
-      case  0:
-        break;
-      case  1:
-        {
-          boost::scoped_array<uint8_t> buf(new uint8_t[len]);
-          if (libpff_item_get_entry_value_binary_data(item, si, etype, buf.get(), len, flags, &error) != 1) {
-            throw libpff_error(error, __LINE__);
-          }
-
-          json.scalar_write(key, buf.get(), len);
-        }
-        break;
-      }
-    }
+    write_binary_value(
+      &libpff_item_get_entry_value_binary_data_size,
+      &libpff_item_get_entry_value_binary_data,
+      item, si, etype, flags, key, json
+    );
+    break;
   }
 }
 
@@ -660,12 +650,17 @@ void write_multi_value(
   JSON_writer& json)
 {
 // FIXME: This is way broken.
+// FIXME: include value index in error messages
 
   libpff_error_t* error = 0;
 
   std::string key(entry_type_string(etype));
 
   MultiValuePtr mvp(get_multivalue(item, si, etype, flags), &destroy_multivalue);
+  if (!mvp) {
+    throw libpff_error("unable to retrieve multi-value entry", __LINE__);
+  }
+
   libpff_multi_value_t* mv = mvp.get();
 
   int vcount;
@@ -745,7 +740,8 @@ void write_entry(
   JSON_writer& json)
 {
   if (vtype & LIBPFF_VALUE_TYPE_MULTI_VALUE_FLAG) {
-    write_multi_value(item, si, etype, vtype, flags, json);
+//    write_multi_value(item, si, etype, vtype, flags, json);
+    write_multi_value(item, si, etype, vtype, flags | LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, json);
   }
   else {
     write_single_value(item, si, etype, vtype, flags, json);
@@ -779,6 +775,7 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, const std::s
           throw libpff_error(error, __LINE__);
         }
 
+// TODO: what is this?
         json.scalar_write("maps to entry type", nnum);
       }
       else if (ntype == LIBPFF_NAME_TO_ID_MAP_ENTRY_TYPE_STRING) {
@@ -792,6 +789,7 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, const std::s
           throw libpff_error(error, __LINE__);
         }
 
+// TODO: what is this?
         json.scalar_write("maps to entry", (const char*) buf.get());
       }
     }
@@ -904,7 +902,7 @@ void handle_subitems(libpff_item_t* item, const std::string& path, JSON_writer& 
 }
 
 void handle_unknowns(libpff_item_t* folder, const std::string& path, JSON_writer& json) {
-  // FIXME: These are known unknowns, in the Rumsfeldian sense.
+  // TODO: These are known unknowns, in the Rumsfeldian sense.
   // I.e., we know that we have no idea wtf these are.
   try {
     ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
