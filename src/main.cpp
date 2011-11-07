@@ -752,9 +752,6 @@ void write_multi_value(
   const std::string& path,
   JSON_writer& json)
 {
-// FIXME: This is way broken.
-// FIXME: include value index in error messages
-
   libpff_error_t* error = 0;
 
   const std::string key(entry_type_string(etype));
