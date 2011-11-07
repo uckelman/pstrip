@@ -803,11 +803,19 @@ void handle_item_value(libpff_item_t* item, uint32_t s, uint32_t e, const std::s
   uint8_t* vdata = 0;
   size_t len;
 
-  if (libpff_item_get_entry_value(item, s, etype, &matched_vtype, &vdata, &len, LIBPFF_ENTRY_VALUE_FLAG_MATCH_ANY_VALUE_TYPE | LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1) {
+  if (libpff_item_get_entry_value(
+    item, s, etype, &matched_vtype, &vdata, &len,
+    LIBPFF_ENTRY_VALUE_FLAG_MATCH_ANY_VALUE_TYPE |
+    LIBPFF_ENTRY_VALUE_FLAG_IGNORE_NAME_TO_ID_MAP, &error) != 1)
+  {
     throw libpff_error(error, __LINE__);
   }
 
-  json.scalar_write("matched value type", matched_vtype);
+  if (vtype != matched_vtype) {
+    // the matched type is only interesting in case of a mismatch
+    // FIMXE: maybe this should print an error?
+    json.scalar_write("matched value type", matched_vtype);
+  }
 
   try {
     write_entry(item, s, etype, vtype, 0, json);
