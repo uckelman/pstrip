@@ -553,9 +553,7 @@ void write_single_value(
   uint8_t flags,
   JSON_writer& json)
 {
-  libpff_error_t* error = 0;
-
-  std::string key(entry_type_string(etype));
+  const std::string key(entry_type_string(etype));
 
   switch (vtype) {
   case LIBPFF_VALUE_TYPE_UNSPECIFIED:
@@ -654,7 +652,7 @@ void write_multi_value(
 
   libpff_error_t* error = 0;
 
-  std::string key(entry_type_string(etype));
+  const std::string key(entry_type_string(etype));
 
   MultiValuePtr mvp(get_multivalue(item, si, etype, flags), &destroy_multivalue);
   if (!mvp) {
