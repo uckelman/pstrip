@@ -19,6 +19,11 @@ JSON_writer::JSON_writer(std::ostream& o): out(o), depth(0) {
   first_child.push(true);
 }
 
+void JSON_writer::key_write(const std::string& key) {
+  next_element();
+  write_key(key);
+}
+
 void JSON_writer::object_open() { scope_open('{'); }
 
 void JSON_writer::object_close() { scope_close('}'); }
@@ -51,50 +56,47 @@ void JSON_writer::member_scope_open(char delim) {
 void JSON_writer::member_scope_close(char delim) { scope_close(delim); }
 
 void JSON_writer::object_member_open(const std::string& key) {
-  next_element();
-  write_key(key);
+  key_write(key);
   member_scope_open('{');
 }
 
 void JSON_writer::object_member_close() { member_scope_close('}'); }
 
 void JSON_writer::array_member_open(const std::string& key) {
-  next_element();
-  write_key(key);
+  key_write(key);
   member_scope_open('[');
 }
 
 void JSON_writer::array_member_close() { member_scope_close(']'); }
 
-void JSON_writer::null_write(const std::string& key) {
-  next_element();
-  write_key(key);
-  out << "null";
-}
-
-void JSON_writer::scalar_write(const std::string& key, const std::string& value)
-{
-  next_element();
-  write_key(key);
+void JSON_writer::value_write(const std::string& value) {
   out << quote(value);
 }
 
-void JSON_writer::scalar_write(const std::string& key, char* value)
-{
-  scalar_write(key, std::string(value));
+void JSON_writer::value_write_null() {
+  out << "null";
 }
 
-void JSON_writer::scalar_write(const std::string& key, const char* value)
-{
-  scalar_write(key, std::string(value));
+void JSON_writer::value_write_true() {
+  out << "true";
+}
+
+void JSON_writer::value_write_false() {
+  out << "false";
+}
+
+void JSON_writer::value_write(char* value) {
+  out << quote(value);
+}
+
+void JSON_writer::value_write(const char* value) {
+  out << quote(value);
 }
 
 typedef boost::archive::iterators::base64_from_binary<boost::archive::iterators::transform_width<const char*, 6, 8> > base64_iterator;
 
-void JSON_writer::scalar_write(const std::string& key,
-                               const unsigned char* value, size_t length) {
-  next_element();
-  out << indent(depth) << quote(key) << KVSEP << '"';
+void JSON_writer::value_write(const unsigned char* value, size_t length) {
+  out << '"';
 
   std::copy(base64_iterator(value),
             base64_iterator(value + length),
@@ -111,6 +113,73 @@ void JSON_writer::scalar_write(const std::string& key,
   }
 
   out << '"';
+}
+
+void JSON_writer::object_member_write_null(const std::string& key) {
+  key_write(key);
+  out << "null";
+}
+
+void JSON_writer::object_member_write_true(const std::string& key) {
+  key_write(key);
+  out << "true";
+}
+
+void JSON_writer::object_member_write_false(const std::string& key) {
+  key_write(key);
+  out << "false";
+}
+
+void JSON_writer::object_member_write(const std::string& key, char* value) {
+  key_write(key);
+  value_write(value);
+}
+
+void JSON_writer::object_member_write(const std::string& key,
+                                      const char* value)
+{
+  key_write(key);
+  value_write(value);
+}
+
+void JSON_writer::object_member_write(const std::string& key,
+                                      const unsigned char* value,
+                                      size_t length)
+{
+  key_write(key);
+  value_write(value, length);  
+}
+
+void JSON_writer::array_member_write_null() {
+  next_element();
+  out << "null";
+}
+
+void JSON_writer::array_member_write_true() {
+  next_element();
+  out << "true";
+}
+
+void JSON_writer::array_member_write_false() {
+  next_element();
+  out << "false";
+}
+
+void JSON_writer::array_member_write(char* value) {
+  next_element();
+  value_write(value);
+}
+
+void JSON_writer::array_member_write(const char* value) {
+  next_element(); 
+  value_write(value);
+}
+
+void JSON_writer::array_member_write(const unsigned char* value,
+                                     size_t length)
+{
+  next_element(); 
+  value_write(value, length);  
 }
 
 void JSON_writer::reset() {

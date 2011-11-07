@@ -25,6 +25,8 @@ class quote {
 public:
   quote(const std::string& s): str(s) {}
 
+  quote(const char* s): str(s) {}
+
   std::ostream& operator()(std::ostream& out) const {
     out << '"';
 
@@ -81,22 +83,51 @@ public:
   void array_member_open(const std::string& key);
   void array_member_close();
 
-  template <typename T> void scalar_write(const std::string& key,
-                                          const T& value) 
-  {
-    next_element();
-    write_key(key);
+  void key_write(const std::string& key);
+
+  void value_write_null();
+  void value_write_true();
+  void value_write_false();
+
+  template <typename T> void value_write(const T& value) {
     out << value;
   }
 
-  void null_write(const std::string& key);
+  void value_write(const std::string& value);
+  void value_write(char* value);
+  void value_write(const char* value);
+  void value_write(const unsigned char* value, size_t length);
 
-  void scalar_write(const std::string& key, const std::string& value);
-  void scalar_write(const std::string& key, char* value);
-  void scalar_write(const std::string& key, const char* value);
+  template <typename T> void object_member_write(const std::string& key,
+                                                 const T& value)
+  {
+    key_write(key);
+    value_write(value);
+  }
 
-  void scalar_write(const std::string& key,
-                    const unsigned char* value, size_t length);
+  void object_member_write_null(const std::string& key);
+  void object_member_write_true(const std::string& key);
+  void object_member_write_false(const std::string& key);
+
+  void object_member_write(const std::string& key, char* value);
+  void object_member_write(const std::string& key, const char* value);
+
+  void object_member_write(const std::string& key,
+                           const unsigned char* value, size_t length);
+
+  template <typename T> void array_member_write(const T& value) {
+    next_element();
+    value_write(value);
+  }
+
+  void array_member_write_null();
+  void array_member_write_true();
+  void array_member_write_false();
+
+  void array_member_write(const std::string& value);
+  void array_member_write(char* value);
+  void array_member_write(const char* value);
+  void array_member_write(const unsigned char* value, size_t length);
 
   void reset();
 
