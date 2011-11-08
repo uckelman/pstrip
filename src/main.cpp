@@ -23,7 +23,7 @@ template <typename L, typename R> std::string operator+(L left, R right) {
   return os.str();
 }
 
-void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json);
+void handle_item(libpff_item_t* item, const std::string& path, const std::string& dpath, JSON_writer& json);
 
 typedef boost::shared_ptr<libpff_file_t> FilePtr;
 typedef boost::shared_ptr<libpff_item_t> ItemPtr;
@@ -949,7 +949,7 @@ void handle_item_values(libpff_item_t* item, const std::string& path, JSON_write
   }
 }
 
-template <typename C, typename G> void handle_items_loop(C item_count_getter, G item_getter, const std::string& path, JSON_writer& json) {
+template <typename C, typename G> void handle_items_loop(C item_count_getter, G item_getter, const std::string& path, const std::string& dpath, JSON_writer& json) {
   try {
     libpff_error_t* error = 0;
 
@@ -963,7 +963,36 @@ template <typename C, typename G> void handle_items_loop(C item_count_getter, G 
         std::string cpath(path + '/' + i);
         try {
           ItemPtr itemp(item_getter(i), &destroy_item);
-          handle_item(itemp.get(), cpath, json);
+
+          // display name
+          std::string cdpath;
+          try {
+            libpff_error_t* error = 0;
+            size_t len;
+            switch (libpff_item_get_utf8_display_name_size(itemp.get(), &len, &error)) {
+            case -1:
+              throw libpff_error(error, __LINE__);
+            case  0:
+              cdpath = dpath + '/' + i;
+              break;
+            case  1:
+              {
+                boost::scoped_array<uint8_t> buf(new uint8_t[len]);
+                if (libpff_item_get_utf8_display_name(itemp.get(), buf.get(), len, &error) != 1) {
+                  throw libpff_error(error, __LINE__);
+                }
+
+                cdpath = dpath + '/' + (const char*) buf.get();
+              }
+              break;
+            }
+          }
+          catch (const libpff_error& e) {
+            std::cerr << "Error: " << path << ": " << e.what() << std::endl;
+            cdpath = dpath + '/' + i;
+          }
+
+          handle_item(itemp.get(), cpath, cdpath, json);
         }
         catch (const libpff_error& e) {
           std::cerr << "Error: " << cpath << ": " << e.what() << std::endl;
@@ -976,21 +1005,23 @@ template <typename C, typename G> void handle_items_loop(C item_count_getter, G 
   }
 }
 
-void handle_subitems(libpff_item_t* item, const std::string& path, JSON_writer& json) {
+void handle_subitems(libpff_item_t* item, const std::string& path, const std::string& dpath, JSON_writer& json) {
   handle_items_loop(
     boost::bind(&libpff_item_get_number_of_sub_items, item, _1, _2),
     boost::bind(&get_child, item, _1),
-    path, json
+    path,
+    dpath,
+    json
   );
 }
 
-void handle_unknowns(libpff_item_t* folder, const std::string& path, JSON_writer& json) {
+void handle_unknowns(libpff_item_t* folder, const std::string& path, const std::string& dpath, JSON_writer& json) {
   // TODO: These are known unknowns, in the Rumsfeldian sense.
   // I.e., we know that we have no idea wtf these are.
   try {
     ItemPtr unknownsp(get_unknowns(folder), &destroy_item);
     if (unknownsp) {
-      handle_item(unknownsp.get(), path + "/unknowns", json);
+      handle_item(unknownsp.get(), path + "/unknowns", dpath + "/unknowns", json);
     }
   }
   catch (const libpff_error& e) {
@@ -1019,11 +1050,14 @@ template <typename T, typename G> void write_attrib(G getter, const std::string&
   }
 }
 
-void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json) {
+void handle_item(libpff_item_t* item, const std::string& path, const std::string& dpath, JSON_writer& json) {
   json.object_open();
 
   // path
   json.object_member_write("path", path);
+
+  // display path
+  json.object_member_write("display path", dpath);
 
   // item type
   uint8_t itype = LIBPFF_ITEM_TYPE_UNDEFINED;
@@ -1056,24 +1090,26 @@ void handle_item(libpff_item_t* item, const std::string& path, JSON_writer& json
   json.reset();
 
   // process children
-  handle_subitems(item, path, json);
+  handle_subitems(item, path, dpath, json);
 
   // process unknowns, for folders only
   if (itype == LIBPFF_ITEM_TYPE_FOLDER) {
-    handle_unknowns(item, path, json);
+    handle_unknowns(item, path, dpath, json);
   }
 }
 
 void handle_tree(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
   ItemPtr rootp(get_root(file), &destroy_item);
-  handle_subitems(rootp.get(), '/' + filename, json);
+  handle_subitems(rootp.get(), '/' + filename, '/' + filename, json);
 }
 
 void handle_orphans(libpff_file_t* file, const std::string& filename, JSON_writer& json) {
   handle_items_loop(
     boost::bind(&libpff_file_get_number_of_orphan_items, file, _1, _2),
     boost::bind(&get_orphan, file, _1),
-    '/' + filename + "/orphans", json
+    '/' + filename + "/orphans",
+    '/' + filename + "/orphans",
+    json
   );
 }
 
@@ -1096,7 +1132,9 @@ void handle_recovered(libpff_file_t* file, const std::string& filename, JSON_wri
     handle_items_loop(
       boost::bind(&libpff_file_get_number_of_recovered_items, file, _1, _2),
       boost::bind(&get_recovered, file, _1),
-      path, json
+      path,
+      path,
+      json
     );
   }
   catch (const libpff_error& e) {
